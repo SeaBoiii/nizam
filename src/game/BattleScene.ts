@@ -184,7 +184,7 @@ export class BattleScene {
   }
 
   update(frameDt: number): void {
-    if (this.finished) {
+    if (this.finished || this.root.destroyed) {
       return;
     }
 
@@ -199,6 +199,14 @@ export class BattleScene {
     while (this.accumulator >= FIXED_DT) {
       this.fixedUpdate(FIXED_DT);
       this.accumulator -= FIXED_DT;
+
+      if (this.finished || this.root.destroyed) {
+        return;
+      }
+    }
+
+    if (this.finished || this.root.destroyed) {
+      return;
     }
 
     this.renderFrame();
