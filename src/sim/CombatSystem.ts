@@ -1,47 +1,33 @@
 import { computeChargeBurstDamage, applyChargeKnockback, consumeCharge, updateChargeState } from './combat/Charge';
 import type { Soldier } from './Soldier';
-import { SpatialHash } from './SpatialHash';
-import type { Squad } from './Squad';
+import type { SpatialHash } from './SpatialHash';
 import { applyChargeCounter } from './rules/Counters';
 import { computeDamage } from './rules/Damage';
 
 export class CombatSystem {
-  private readonly grid = new SpatialHash(30);
-  private readonly aliveBuffer: Soldier[] = [];
   private readonly neighbors: Soldier[] = [];
 
-  update(dt: number, squads: readonly Squad[]): void {
-    this.aliveBuffer.length = 0;
-
-    for (let squadIndex = 0; squadIndex < squads.length; squadIndex += 1) {
-      const soldiers = squads[squadIndex].soldiers;
-      for (let i = 0; i < soldiers.length; i += 1) {
-        const soldier = soldiers[i];
-        if (!soldier.alive) {
-          continue;
-        }
-
-        if (soldier.attackCooldown > 0) {
-          soldier.attackCooldown = Math.max(0, soldier.attackCooldown - dt);
-        }
-
-        updateChargeState(soldier, dt);
-        this.aliveBuffer.push(soldier);
+  update(dt: number, aliveUnits: readonly Soldier[], spatialGrid: SpatialHash): void {
+    for (let i = 0; i < aliveUnits.length; i += 1) {
+      const soldier = aliveUnits[i];
+      if (!soldier.alive) {
+        continue;
       }
+
+      if (soldier.attackCooldown > 0) {
+        soldier.attackCooldown = Math.max(0, soldier.attackCooldown - dt);
+      }
+
+      updateChargeState(soldier, dt);
     }
 
-    this.grid.clear();
-    for (let i = 0; i < this.aliveBuffer.length; i += 1) {
-      this.grid.insert(this.aliveBuffer[i]);
-    }
-
-    for (let i = 0; i < this.aliveBuffer.length; i += 1) {
-      const attacker = this.aliveBuffer[i];
+    for (let i = 0; i < aliveUnits.length; i += 1) {
+      const attacker = aliveUnits[i];
       if (!attacker.alive) {
         continue;
       }
 
-      const target = this.findNearestEnemyInRange(attacker);
+      const target = this.findNearestEnemyInRange(attacker, spatialGrid);
       if (target === null || !target.alive) {
         continue;
       }
@@ -71,11 +57,11 @@ export class CombatSystem {
     }
   }
 
-  private findNearestEnemyInRange(attacker: Soldier): Soldier | null {
+  private findNearestEnemyInRange(attacker: Soldier, spatialGrid: SpatialHash): Soldier | null {
     const meleeRange = attacker.baseStats.meleeRange;
     const maxRangeSq = meleeRange * meleeRange;
 
-    this.grid.queryNearby(attacker.position.x, attacker.position.y, this.neighbors);
+    spatialGrid.queryRadius(attacker.position.x, attacker.position.y, meleeRange + 2, this.neighbors);
 
     let nearest: Soldier | null = null;
     let nearestDistSq = maxRangeSq;

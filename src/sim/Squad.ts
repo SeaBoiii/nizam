@@ -2,7 +2,9 @@ import { Container, Graphics, Text } from 'pixi.js';
 import { clamp, damp, rotateTowardAngle, shortestAngleDelta } from '../utils/math';
 import { Vec2 } from '../utils/vec2';
 import { computeSlotLocal, estimateFormationRadius } from './Formation';
+import { skirmishThreatRange } from './orders/RangedOrders';
 import type { Waypoint } from './Orders';
+import { SKIRMISH_ADVANCE_SPEED_FACTOR, SKIRMISH_RETREAT_DISTANCE, SKIRMISH_RETREAT_SPEED_FACTOR } from './rules/Constants';
 import { Soldier } from './Soldier';
 import { TeamId, type FormationType, type OrderMode, type WorldBounds } from './types';
 import type { UnitArchetype } from './types/UnitArchetype';
@@ -35,6 +37,7 @@ export interface SquadUpdateContext {
   dt: number;
   simTime: number;
   world: WorldBounds;
+  objectivePosition: Vec2;
   allSquads: readonly Squad[];
 }
 
@@ -64,6 +67,7 @@ export class Squad {
 
   private readonly slotTemp = new Vec2();
   private readonly worldSlotTemp = new Vec2();
+  private readonly steerTargetTemp = new Vec2();
   private readonly selectionOutline: Graphics;
   private readonly label: Text;
 
@@ -195,6 +199,21 @@ export class Squad {
     this.chargeTarget = null;
   }
 
+  orderVolley(): void {
+    this.order = 'volley';
+    this.waypoints.length = 0;
+    this.holdAnchor.copy(this.anchor);
+    this.anchorVelocity.scale(0.6);
+    this.chargeTarget = null;
+  }
+
+  orderSkirmish(): void {
+    this.order = 'skirmish';
+    this.waypoints.length = 0;
+    this.holdAnchor.copy(this.anchor);
+    this.chargeTarget = null;
+  }
+
   isChargingOrder(): boolean {
     return this.order === 'charge';
   }
@@ -293,6 +312,15 @@ export class Squad {
         this.driveAnchorToward(this.holdAnchor, context.dt, this.archetype.stats.moveSpeed * 0.35);
         break;
       }
+      case 'volley': {
+        this.chargeTarget = null;
+        this.driveAnchorToward(this.holdAnchor, context.dt, this.archetype.stats.moveSpeed * 0.3);
+        break;
+      }
+      case 'skirmish': {
+        this.runSkirmish(context);
+        break;
+      }
       case 'move':
       case 'retreat':
       case 'rout': {
@@ -373,6 +401,49 @@ export class Squad {
     const toTargetY = target.anchor.y - this.anchor.y;
     this.desiredFacing = Math.atan2(toTargetY, toTargetX);
     this.driveAnchorToward(target.anchor, dt, this.archetype.stats.moveSpeed * ANCHOR_CHARGE_SPEED_BONUS);
+  }
+
+  private runSkirmish(context: SquadUpdateContext): void {
+    const target = this.findNearestEnemy(context.allSquads);
+    this.chargeTarget = target;
+
+    const moveSpeed = this.archetype.stats.moveSpeed;
+    if (target === null) {
+      this.driveAnchorToward(
+        context.objectivePosition,
+        context.dt,
+        moveSpeed * SKIRMISH_ADVANCE_SPEED_FACTOR,
+      );
+      return;
+    }
+
+    const toTargetX = target.anchor.x - this.anchor.x;
+    const toTargetY = target.anchor.y - this.anchor.y;
+    const targetDist = Math.hypot(toTargetX, toTargetY);
+    if (targetDist <= 0.0001) {
+      this.anchorVelocity.scale(0.85);
+      return;
+    }
+
+    this.desiredFacing = Math.atan2(toTargetY, toTargetX);
+
+    const rangedRange = Math.max(130, this.archetype.stats.rangedRange);
+    const threatRange = skirmishThreatRange(rangedRange);
+    if (targetDist < threatRange) {
+      const invDist = 1 / targetDist;
+      this.steerTargetTemp.set(
+        this.anchor.x - toTargetX * invDist * SKIRMISH_RETREAT_DISTANCE,
+        this.anchor.y - toTargetY * invDist * SKIRMISH_RETREAT_DISTANCE,
+      );
+      this.driveAnchorToward(this.steerTargetTemp, context.dt, moveSpeed * SKIRMISH_RETREAT_SPEED_FACTOR);
+      return;
+    }
+
+    this.driveAnchorToward(
+      context.objectivePosition,
+      context.dt,
+      moveSpeed * SKIRMISH_ADVANCE_SPEED_FACTOR,
+    );
   }
 
   private findNearestEnemy(allSquads: readonly Squad[]): Squad | null {
@@ -477,8 +548,13 @@ export class Squad {
 
   private updateSoldiers(context: SquadUpdateContext): void {
     const chargeOrder = this.order === 'charge';
-    const slotScale = chargeOrder ? 1.2 : 1;
-    const separationWeight = chargeOrder ? SEPARATION_WEIGHT * 0.8 : SEPARATION_WEIGHT;
+    const skirmishOrder = this.order === 'skirmish';
+    const slotScale = chargeOrder ? 1.2 : skirmishOrder ? 1.08 : 1;
+    const separationWeight = chargeOrder
+      ? SEPARATION_WEIGHT * 0.8
+      : skirmishOrder
+        ? SEPARATION_WEIGHT * 0.95
+        : SEPARATION_WEIGHT;
 
     for (let i = 0; i < this.soldiers.length; i += 1) {
       const soldier = this.soldiers[i];
@@ -544,6 +620,8 @@ export class Squad {
         moveSpeed *= 1.1;
       } else if (this.order === 'rout') {
         moveSpeed *= 1.22;
+      } else if (this.order === 'skirmish') {
+        moveSpeed *= 1.02;
       }
 
       let desiredVx = 0;

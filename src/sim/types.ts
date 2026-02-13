@@ -5,7 +5,7 @@ export enum TeamId {
 
 export type FormationType = 'line' | 'column' | 'wedge' | 'loose';
 
-export type OrderMode = 'move' | 'hold' | 'charge' | 'retreat' | 'rout';
+export type OrderMode = 'move' | 'hold' | 'charge' | 'retreat' | 'rout' | 'volley' | 'skirmish';
 
 export interface WorldBounds {
   width: number;

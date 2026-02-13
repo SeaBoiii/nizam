@@ -1,0 +1,75 @@
+import { Container, Graphics, Text } from 'pixi.js';
+import type { Squad } from '../../sim/Squad';
+import type { Soldier } from '../../sim/Soldier';
+import type { Vec2 } from '../../utils/vec2';
+import type { WorldBounds } from '../../sim/types';
+import { TeamId } from '../../sim/types';
+import { MINIMAP_HEIGHT, MINIMAP_MARGIN, MINIMAP_WIDTH } from '../../sim/rules/Constants';
+
+export class Minimap {
+  private readonly root = new Container();
+  private readonly graphics = new Graphics();
+  private readonly title = new Text({
+    text: 'Minimap',
+    style: {
+      fill: 0xd7e6ff,
+      fontFamily: 'monospace',
+      fontSize: 11,
+    },
+  });
+
+  private width = MINIMAP_WIDTH;
+  private height = MINIMAP_HEIGHT;
+
+  constructor(uiLayer: Container, private readonly world: WorldBounds) {
+    this.root.addChild(this.graphics);
+    this.title.position.set(6, 4);
+    this.root.addChild(this.title);
+    uiLayer.addChild(this.root);
+  }
+
+  resize(screenWidth: number, screenHeight: number): void {
+    this.root.position.set(screenWidth - this.width - MINIMAP_MARGIN, screenHeight - this.height - MINIMAP_MARGIN);
+  }
+
+  update(squads: readonly Squad[], units: readonly Soldier[], capturePoint: Vec2, captureRadius: number): void {
+    const scaleX = this.width / this.world.width;
+    const scaleY = this.height / this.world.height;
+
+    this.graphics.clear();
+    this.graphics.roundRect(0, 0, this.width, this.height, 8);
+    this.graphics.fill({ color: 0x0b1219, alpha: 0.72 });
+    this.graphics.stroke({ color: 0x7aa5d6, alpha: 0.7, width: 1.4 });
+
+    const cpX = capturePoint.x * scaleX;
+    const cpY = capturePoint.y * scaleY;
+    this.graphics.circle(cpX, cpY, Math.max(2, captureRadius * scaleX));
+    this.graphics.stroke({ color: 0xf4cf86, alpha: 0.65, width: 1 });
+
+    for (let i = 0; i < units.length; i += 1) {
+      const unit = units[i];
+      if (!unit.alive) {
+        continue;
+      }
+
+      const color = unit.team === TeamId.Blue ? 0x66b7ff : 0xff8d8d;
+      const x = unit.position.x * scaleX;
+      const y = unit.position.y * scaleY;
+      this.graphics.circle(x, y, 1.15);
+      this.graphics.fill({ color, alpha: 0.85 });
+    }
+
+    for (let i = 0; i < squads.length; i += 1) {
+      const squad = squads[i];
+      if (!squad.hasLivingSoldiers()) {
+        continue;
+      }
+
+      const color = squad.team === TeamId.Blue ? 0x9dd4ff : 0xffbbbb;
+      const x = squad.anchor.x * scaleX;
+      const y = squad.anchor.y * scaleY;
+      this.graphics.rect(x - 1.8, y - 1.8, 3.6, 3.6);
+      this.graphics.fill({ color, alpha: 0.95 });
+    }
+  }
+}

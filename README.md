@@ -81,6 +81,8 @@ On GitHub Actions, `REPO_NAME` is set automatically from `${{ github.event.repos
 - Hold: `H`
 - Charge nearest enemy: `C`
 - Retreat to map edge: `R`
+- Volley (ranged stance): `V`
+- Skirmish (kite while shooting): `K`
 - Restart match: `N`
 
 ## Objective and match flow
@@ -92,10 +94,19 @@ On GitHub Actions, `REPO_NAME` is set automatically from `${{ github.event.repos
 - First side to reach `100%` capture progress wins the match.
 - End screen appears with winner; press `N` to restart from fresh spawns.
 
+## Ranged combat (Sprint 2)
+
+- Archer squads now fire real projectiles (no hitscan).
+- Arrows have travel time and gravity, so long shots arc and can miss.
+- `VOLLEY` keeps formation and fires at targets in range.
+- `SKIRMISH` kites away when enemies get too close, while continuing to fire.
+- Friendly fire is disabled by default.
+- Shielded units take reduced ranged damage from the front arc.
+
 ## Gameplay model included
 
 - 2 teams (Blue vs Red), 3 squads each
-- Squad archetypes: Infantry, Spearmen, Cavalry (Archers archetype data included for extension)
+- Squad archetypes: Infantry, Spearmen, Cavalry, Archers
 - ~30 soldiers per squad
 - Formation slots with stable slot assignment
 - Steering with arrive + separation
@@ -103,9 +114,12 @@ On GitHub Actions, `REPO_NAME` is set automatically from `${{ github.event.repos
 - HP, casualties, morale, flank pressure, rout/recovery
 - Directional melee damage (rear/flank/front + shield mitigation)
 - Cavalry charge burst with knockback and spear counter behavior
+- Real projectile simulation for ranged units (gravity + lifetime + collision)
 - Fixed timestep simulation (1/60)
 - HUD with FPS/selection/archetype/formation/order
 - Objective HUD (Blue/Red capture progress and contested state)
+- Minimap with units/squads/capture point
+- Squad banners + morale bars for battlefield readability
 - Waypoint path rendering for selected squads
 
 ## Troubleshooting blank page on Pages

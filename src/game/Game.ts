@@ -7,12 +7,17 @@ import { TeamId, type FormationType, type OrderMode, type WorldBounds } from '..
 import { Hud } from '../ui/Hud';
 import { SelectionBox } from '../ui/SelectionBox';
 import { Vec2 } from '../utils/vec2';
-import { CAVALRY, INFANTRY, SPEARMEN } from '../sim/rules/Archetypes';
+import { ARCHERS, CAVALRY, INFANTRY, SPEARMEN } from '../sim/rules/Archetypes';
 import { ObjectiveManager } from '../sim/objectives/ObjectiveManager';
 import { ObjectiveHUD } from '../ui/widgets/ObjectiveHUD';
 import { EndScreen } from '../ui/widgets/EndScreen';
 import type { Soldier } from '../sim/Soldier';
 import type { UnitArchetype } from '../sim/types/UnitArchetype';
+import { SpatialHash } from '../sim/SpatialHash';
+import { ProjectileSystem } from '../sim/combat/ProjectileSystem';
+import { RangedSystem } from '../sim/combat/RangedSystem';
+import { Minimap } from '../ui/widgets/Minimap';
+import { SquadIndicators } from '../ui/widgets/SquadIndicators';
 
 const FIXED_DT = 1 / 60;
 const WORLD_WIDTH = 4000;
@@ -35,6 +40,10 @@ function orderLabel(order: OrderMode): string {
       return 'RETREAT';
     case 'rout':
       return 'ROUT';
+    case 'volley':
+      return 'VOLLEY';
+    case 'skirmish':
+      return 'SKIRMISH';
   }
 }
 
@@ -51,20 +60,27 @@ export class Game {
   private readonly objectiveLayer = new Container();
   private readonly waypointLayer = new Graphics();
   private readonly unitLayer = new Container();
+  private readonly projectileLayer = new Container();
   private readonly overlayLayer = new Container();
   private readonly uiLayer = new Container();
 
   private readonly camera: Camera;
   private readonly hud: Hud;
   private readonly objectiveHud: ObjectiveHUD;
+  private readonly minimap: Minimap;
   private readonly endScreen: EndScreen;
   private readonly selectionBox: SelectionBox;
+  private readonly squadIndicators: SquadIndicators;
   private readonly combat = new CombatSystem();
+  private readonly rangedSystem = new RangedSystem();
+  private readonly unitGrid = new SpatialHash(32);
 
   private readonly objectiveManager = new ObjectiveManager(
     new Vec2(WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5),
     240,
   );
+
+  private readonly projectileSystem: ProjectileSystem;
 
   private readonly squads: Squad[] = [];
   private readonly selectedSquads = new Set<Squad>();
@@ -98,6 +114,7 @@ export class Game {
     this.worldLayer.addChild(this.objectiveLayer);
     this.worldLayer.addChild(this.waypointLayer);
     this.worldLayer.addChild(this.unitLayer);
+    this.worldLayer.addChild(this.projectileLayer);
     this.worldLayer.addChild(this.overlayLayer);
     this.app.stage.addChild(this.uiLayer);
 
@@ -106,8 +123,11 @@ export class Game {
     this.camera = new Camera(this.worldBounds);
     this.hud = new Hud(this.uiLayer);
     this.objectiveHud = new ObjectiveHUD(this.uiLayer);
+    this.minimap = new Minimap(this.uiLayer, this.worldBounds);
     this.endScreen = new EndScreen(this.uiLayer);
     this.selectionBox = new SelectionBox(this.uiLayer);
+    this.squadIndicators = new SquadIndicators(this.overlayLayer);
+    this.projectileSystem = new ProjectileSystem(this.projectileLayer);
 
     this.drawMap();
 
@@ -115,6 +135,7 @@ export class Game {
       dt: FIXED_DT,
       simTime: 0,
       world: this.worldBounds,
+      objectivePosition: this.objectiveManager.capturePoint.position,
       allSquads: this.squads,
     };
 
@@ -122,6 +143,7 @@ export class Game {
     this.camera.setViewport(this.app.screen.width, this.app.screen.height);
     this.camera.applyTo(this.worldLayer);
     this.endScreen.resize(this.app.screen.width, this.app.screen.height);
+    this.minimap.resize(this.app.screen.width, this.app.screen.height);
 
     this.startMatch();
 
@@ -132,11 +154,17 @@ export class Game {
   private startMatch(): void {
     this.clearSquads();
     this.selectedSquads.clear();
+    this.selectionBox.hide();
+    this.aliveSoldiers.length = 0;
     this.simTime = 0;
     this.lastOrderMode = 'IDLE';
 
     this.objectiveManager.reset();
+    this.projectileSystem.clear();
     this.spawnTeams();
+
+    this.collectAliveSoldiers();
+    this.rebuildUnitGrid();
 
     this.matchState = 'PLAYING';
     this.endScreen.hide();
@@ -171,22 +199,23 @@ export class Game {
   }
 
   private spawnTeams(): void {
-    const blueArchetypes: readonly UnitArchetype[] = [INFANTRY, SPEARMEN, CAVALRY];
-    const redArchetypes: readonly UnitArchetype[] = [INFANTRY, INFANTRY, SPEARMEN];
+    const blueArchetypes: readonly UnitArchetype[] = [INFANTRY, SPEARMEN, ARCHERS];
+    const redArchetypes: readonly UnitArchetype[] = [INFANTRY, CAVALRY, ARCHERS];
 
     const blueY = [700, 1200, 1700];
     const redY = [700, 1200, 1700];
     let squadId = 1;
 
     for (let i = 0; i < 3; i += 1) {
+      const archetype = blueArchetypes[i];
       const squad = new Squad({
         id: squadId,
         team: TeamId.Blue,
-        color: blueArchetypes[i].id === 'cavalry' ? 0x74c2ff : 0x58aefc,
+        color: archetype.id === 'archers' ? 0x8cc8ff : archetype.id === 'spearmen' ? 0x58aefc : 0x4fa5f0,
         initialAnchor: new Vec2(850, blueY[i]),
         facing: 0,
         soldierCount: SOLDIERS_PER_SQUAD,
-        archetype: blueArchetypes[i],
+        archetype,
         unitLayer: this.unitLayer,
         overlayLayer: this.overlayLayer,
       });
@@ -195,14 +224,15 @@ export class Game {
     }
 
     for (let i = 0; i < 3; i += 1) {
+      const archetype = redArchetypes[i];
       const squad = new Squad({
         id: squadId,
         team: TeamId.Red,
-        color: redArchetypes[i].id === 'spearmen' ? 0xff8f8f : 0xff7c7c,
+        color: archetype.id === 'archers' ? 0xffb399 : archetype.id === 'cavalry' ? 0xff8a8a : 0xff7c7c,
         initialAnchor: new Vec2(3150, redY[i]),
         facing: Math.PI,
         soldierCount: SOLDIERS_PER_SQUAD,
-        archetype: redArchetypes[i],
+        archetype,
         unitLayer: this.unitLayer,
         overlayLayer: this.overlayLayer,
       });
@@ -229,6 +259,7 @@ export class Game {
     this.camera.setViewport(this.app.screen.width, this.app.screen.height);
     this.camera.applyTo(this.worldLayer);
     this.endScreen.resize(this.app.screen.width, this.app.screen.height);
+    this.minimap.resize(this.app.screen.width, this.app.screen.height);
   };
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
@@ -264,6 +295,12 @@ export class Game {
         break;
       case 'KeyR':
         this.commandRetreat();
+        break;
+      case 'KeyV':
+        this.commandVolley();
+        break;
+      case 'KeyK':
+        this.commandSkirmish();
         break;
       default:
         break;
@@ -413,6 +450,30 @@ export class Game {
     this.lastOrderMode = 'RETREAT';
   }
 
+  private commandVolley(): void {
+    if (this.selectedSquads.size === 0) {
+      return;
+    }
+
+    for (const squad of this.selectedSquads) {
+      squad.orderVolley();
+    }
+
+    this.lastOrderMode = 'VOLLEY';
+  }
+
+  private commandSkirmish(): void {
+    if (this.selectedSquads.size === 0) {
+      return;
+    }
+
+    for (const squad of this.selectedSquads) {
+      squad.orderSkirmish();
+    }
+
+    this.lastOrderMode = 'SKIRMISH';
+  }
+
   private performClickSelection(worldPoint: Vec2, additive: boolean): void {
     let clicked: Squad | null = null;
     let nearestDistSq = CLICK_RADIUS_SQ;
@@ -519,7 +580,12 @@ export class Game {
       this.squads[i].update(this.squadUpdateContext);
     }
 
-    this.combat.update(dt, this.squads);
+    this.collectAliveSoldiers();
+    this.rebuildUnitGrid();
+
+    this.rangedSystem.update(dt, this.squads, this.aliveSoldiers, this.unitGrid, this.projectileSystem);
+    this.combat.update(dt, this.aliveSoldiers, this.unitGrid);
+    this.projectileSystem.update(dt, this.aliveSoldiers, this.unitGrid);
 
     this.collectAliveSoldiers();
     this.objectiveManager.update(dt, this.aliveSoldiers);
@@ -541,6 +607,14 @@ export class Game {
           this.aliveSoldiers.push(soldiers[j]);
         }
       }
+    }
+  }
+
+  private rebuildUnitGrid(): void {
+    this.unitGrid.clear();
+
+    for (let i = 0; i < this.aliveSoldiers.length; i += 1) {
+      this.unitGrid.insert(this.aliveSoldiers[i]);
     }
   }
 
@@ -576,6 +650,7 @@ export class Game {
   private renderFrame(): void {
     this.camera.applyTo(this.worldLayer);
     this.drawWaypointPaths();
+    this.squadIndicators.update(this.squads);
 
     const objectiveStatus = this.objectiveManager.getStatus();
 
@@ -594,6 +669,13 @@ export class Game {
       redInside: objectiveStatus.redInside,
       contested: objectiveStatus.contested,
     });
+
+    this.minimap.update(
+      this.squads,
+      this.aliveSoldiers,
+      this.objectiveManager.capturePoint.position,
+      this.objectiveManager.capturePoint.radius,
+    );
   }
 
   private drawWaypointPaths(): void {

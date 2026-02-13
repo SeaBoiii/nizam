@@ -6,6 +6,12 @@ export interface UnitStats {
   attackDamage: number;
   attackRate: number;
   meleeRange: number;
+  rangedDamage: number;
+  rangedRange: number;
+  projectileSpeed: number;
+  projectileGravity: number;
+  rangedCooldown: number;
+  accuracy: number;
   armor: number;
   mass: number;
   chargePower: number;

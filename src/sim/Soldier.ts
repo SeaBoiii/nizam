@@ -39,6 +39,7 @@ export class Soldier {
   alive = true;
 
   attackCooldown = 0;
+  rangedCooldown = 0;
   chargeState: ChargeState = 'none';
   chargeCooldown = 0;
   chargeReady = true;
@@ -60,6 +61,12 @@ export class Soldier {
       attackDamage: options.archetype.stats.attackDamage,
       attackRate: options.archetype.stats.attackRate,
       meleeRange: options.archetype.stats.meleeRange,
+      rangedDamage: options.archetype.stats.rangedDamage,
+      rangedRange: options.archetype.stats.rangedRange,
+      projectileSpeed: options.archetype.stats.projectileSpeed,
+      projectileGravity: options.archetype.stats.projectileGravity,
+      rangedCooldown: options.archetype.stats.rangedCooldown,
+      accuracy: options.archetype.stats.accuracy,
       armor: options.archetype.stats.armor,
       mass: options.archetype.stats.mass,
       chargePower: options.archetype.stats.chargePower,

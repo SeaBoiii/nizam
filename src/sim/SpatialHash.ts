@@ -26,12 +26,18 @@ export class SpatialHash {
   }
 
   queryNearby(x: number, y: number, out: Soldier[]): Soldier[] {
-    out.length = 0;
-    const centerX = Math.floor(x / this.cellSize);
-    const centerY = Math.floor(y / this.cellSize);
+    return this.queryRadius(x, y, this.cellSize * 1.01, out);
+  }
 
-    for (let iy = centerY - 1; iy <= centerY + 1; iy += 1) {
-      for (let ix = centerX - 1; ix <= centerX + 1; ix += 1) {
+  queryRadius(x: number, y: number, radius: number, out: Soldier[]): Soldier[] {
+    out.length = 0;
+    const minX = Math.floor((x - radius) / this.cellSize);
+    const maxX = Math.floor((x + radius) / this.cellSize);
+    const minY = Math.floor((y - radius) / this.cellSize);
+    const maxY = Math.floor((y + radius) / this.cellSize);
+
+    for (let iy = minY; iy <= maxY; iy += 1) {
+      for (let ix = minX; ix <= maxX; ix += 1) {
         const bucket = this.buckets.get(this.key(ix, iy));
         if (bucket === undefined || bucket.length === 0) {
           continue;
