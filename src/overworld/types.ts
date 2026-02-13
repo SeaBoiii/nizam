@@ -1,3 +1,5 @@
+import type { DifficultyMode } from '../meta/Difficulty';
+
 export type NodeType = 'BATTLE' | 'SHOP' | 'RECRUIT' | 'REST' | 'ELITE' | 'BOSS';
 
 export interface Node {
@@ -21,5 +23,8 @@ export interface RunState {
   clearedNodeIds: string[];
   step: number;
   difficultyTier: number;
+  difficultyMode: DifficultyMode;
   restBonusBattles: number;
+  battleNodesCleared: number;
+  lastRewardedNodeId: string;
 }

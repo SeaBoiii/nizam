@@ -61,7 +61,8 @@ export function computeChargeBurstDamage(attacker: Soldier): number {
     CHARGE_SPEED_FACTOR_MIN,
     CHARGE_SPEED_FACTOR_MAX,
   );
-  return attacker.baseStats.attackDamage * attacker.baseStats.chargePower * speedFactor;
+  const perkChargePower = Math.max(0.2, attacker.squad.perkMods.chargePowerMult);
+  return attacker.baseStats.attackDamage * attacker.baseStats.chargePower * perkChargePower * speedFactor;
 }
 
 export function applyChargeKnockback(attacker: Soldier, defender: Soldier): void {
@@ -82,6 +83,6 @@ export function applyChargeKnockback(attacker: Soldier, defender: Soldier): void
 
 export function consumeCharge(attacker: Soldier): void {
   attacker.chargeState = 'cooldown';
-  attacker.chargeCooldown = CHARGE_COOLDOWN_SECONDS;
+  attacker.chargeCooldown = CHARGE_COOLDOWN_SECONDS * Math.max(0.2, attacker.squad.perkMods.chargeCooldownMult);
   attacker.chargeReady = false;
 }

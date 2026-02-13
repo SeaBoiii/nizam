@@ -45,6 +45,45 @@ export interface UpgradePathsContent {
   paths: Record<string, UpgradePathContent>;
 }
 
+export type PerkRarity = 'common' | 'rare';
+
+export interface PerkModsContent {
+  moraleRegenMult?: number;
+  moraleLossMult?: number;
+  routThresholdAdd?: number;
+  cohesionMult?: number;
+  formationSpacingMult?: number;
+  chargePowerMult?: number;
+  chargeCooldownMult?: number;
+  rangedAccuracyAdd?: number;
+  projectileSpeedMult?: number;
+  captureRateMult?: number;
+  waveStrengthMult?: number;
+  spearCounterDamageMult?: number;
+  armorEffectivenessMult?: number;
+  moveSpeedMult?: number;
+  fieldMedicRecruitsPerCasualty?: number;
+}
+
+export interface PerkContent {
+  id: string;
+  name: string;
+  desc: string;
+  rarity: PerkRarity;
+  mods: PerkModsContent;
+}
+
+export interface PerkRewardRulesContent {
+  everyNNodes: number;
+  choices: number;
+}
+
+export interface PerksContent {
+  version: string;
+  perks: PerkContent[];
+  rewardRules: PerkRewardRulesContent;
+}
+
 export interface ObjectiveSelectionWeights {
   CAPTURE: number;
   ASSASSINATE: number;
@@ -189,6 +228,7 @@ export interface ScenariosContent {
 export interface LoadedContent {
   units: UnitsContent;
   upgrades: UpgradePathsContent;
+  perks: PerksContent;
   objectives: ObjectivesTuningContent;
   nodes: NodesTuningContent;
   scenarios: ScenariosContent;

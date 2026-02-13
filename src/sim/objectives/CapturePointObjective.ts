@@ -23,6 +23,7 @@ export class CapturePointObjective implements IObjective {
   private readonly baseGainRate: number;
   private readonly contestedDecayRate: number;
   private readonly opposingProgressDrainFactor: number;
+  private readonly blueCaptureRateMultiplier: number;
 
   progressBlue = 0;
   progressRed = 0;
@@ -47,6 +48,7 @@ export class CapturePointObjective implements IObjective {
     baseGainRate: number,
     contestedDecayRate: number,
     opposingProgressDrainFactor: number,
+    blueCaptureRateMultiplier = 1,
   ) {
     this.id = id;
     this.position = position.clone();
@@ -56,6 +58,7 @@ export class CapturePointObjective implements IObjective {
     this.baseGainRate = Math.max(0.01, baseGainRate);
     this.contestedDecayRate = Math.max(0, contestedDecayRate);
     this.opposingProgressDrainFactor = Math.max(0, Math.min(1, opposingProgressDrainFactor));
+    this.blueCaptureRateMultiplier = Math.max(0.1, blueCaptureRateMultiplier);
 
     this.tacticalState = {
       type: this.type,
@@ -103,10 +106,16 @@ export class CapturePointObjective implements IObjective {
 
     const diff = this.blueInside - this.redInside;
     if (diff > 0) {
-      this.progressBlue += diff * this.baseGainRate * this.captureRateMultiplier * dt;
+      this.progressBlue += diff * this.baseGainRate * this.captureRateMultiplier * this.blueCaptureRateMultiplier * dt;
       this.progressRed = Math.max(
         0,
-        this.progressRed - diff * this.baseGainRate * this.opposingProgressDrainFactor * this.captureRateMultiplier * dt,
+        this.progressRed -
+          diff *
+            this.baseGainRate *
+            this.opposingProgressDrainFactor *
+            this.captureRateMultiplier *
+            this.blueCaptureRateMultiplier *
+            dt,
       );
     } else if (diff < 0) {
       const magnitude = -diff;

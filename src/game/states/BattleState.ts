@@ -1,5 +1,6 @@
 import { Container } from 'pixi.js';
 import { BattleScene } from '../BattleScene';
+import { getCombinedPerkMods } from '../../meta/Perks';
 import type { IGameState } from './IGameState';
 import type { StateContext } from './StateContext';
 import type { BattleScenario } from '../../meta/types';
@@ -31,6 +32,7 @@ export class BattleState implements IGameState {
       parent: this.root,
       scenario,
       armyState: campaign.armyState,
+      playerPerkMods: getCombinedPerkMods(campaign.perkState.pickedPerkIds),
       onFinished: (result) => {
         this.context.setLastBattleResult(result);
         this.context.transitionTo('REWARDS', result);

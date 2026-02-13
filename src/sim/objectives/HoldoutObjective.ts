@@ -28,6 +28,7 @@ interface HoldoutOptions {
   waveSizePerDifficulty?: number;
   waveSizePerWave?: number;
   waveArchetypes?: string[];
+  waveStrengthMultiplier?: number;
 }
 
 export class HoldoutObjective implements IObjective {
@@ -47,6 +48,7 @@ export class HoldoutObjective implements IObjective {
   private readonly waveSizePerDifficulty: number;
   private readonly waveSizePerWave: number;
   private readonly waveArchetypes: string[];
+  private readonly waveStrengthMultiplier: number;
 
   private timeRemaining = 0;
   private elapsed = 0;
@@ -76,6 +78,7 @@ export class HoldoutObjective implements IObjective {
     this.waveSizePerDifficulty = Math.max(0, options.waveSizePerDifficulty ?? 2);
     this.waveSizePerWave = Math.max(0, options.waveSizePerWave ?? 1);
     this.waveArchetypes = options.waveArchetypes && options.waveArchetypes.length > 0 ? [...options.waveArchetypes] : ['infantry'];
+    this.waveStrengthMultiplier = Math.max(0.35, options.waveStrengthMultiplier ?? 1);
 
     this.tacticalState = {
       type: this.type,
@@ -192,10 +195,11 @@ export class HoldoutObjective implements IObjective {
       const archetypeId = this.waveArchetypes[this.rng.int(0, this.waveArchetypes.length - 1)];
       const tier = this.rng.int(Math.max(1, tierCap - 1), Math.min(3, tierCap + 1));
       const size =
-        this.waveBaseSize +
-        this.rng.int(0, this.waveRandomSizeMaxAdd) +
-        (difficulty - 1) * this.waveSizePerDifficulty +
-        this.wavesSpawned * this.waveSizePerWave;
+        (this.waveBaseSize +
+          this.rng.int(0, this.waveRandomSizeMaxAdd) +
+          (difficulty - 1) * this.waveSizePerDifficulty +
+          this.wavesSpawned * this.waveSizePerWave) *
+        this.waveStrengthMultiplier;
 
       const squad = world.spawnSquad({
         team: TeamId.Red,

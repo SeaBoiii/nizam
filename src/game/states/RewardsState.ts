@@ -1,6 +1,9 @@
 import { Container, Graphics, Text } from 'pixi.js';
+import { contentManager } from '../../content/ContentManager';
 import type { IGameState } from './IGameState';
-import type { StateContext } from './StateContext';
+import type { CampaignData, StateContext } from './StateContext';
+import { getScaling } from '../../meta/Difficulty';
+import { getCombinedPerkMods, getDeterministicPerkChoices, shouldOfferPerk } from '../../meta/Perks';
 import type { BattleResult } from '../../meta/types';
 import { TextButton } from '../../ui/widgets/TextButton';
 import {
@@ -12,6 +15,7 @@ import {
 } from '../../meta/Progression';
 import { createSquadMeta } from '../../meta/Army';
 import { SeededRng } from '../../utils/rng';
+import { PerkChoice } from '../../ui/widgets/PerkChoice';
 import { objectiveDisplayName } from '../../sim/objectives/ObjectiveTypes';
 
 export class RewardsState implements IGameState {
@@ -46,8 +50,10 @@ export class RewardsState implements IGameState {
   private readonly upgradeButton: TextButton;
   private readonly recruitButton: TextButton;
   private readonly continueButton: TextButton;
+  private readonly perkChoice = new PerkChoice();
 
   private choiceTaken = false;
+  private perkChoicePending = false;
 
   constructor(private readonly context: StateContext) {
     this.root.addChild(this.bg);
@@ -82,6 +88,7 @@ export class RewardsState implements IGameState {
     this.root.addChild(this.upgradeButton);
     this.root.addChild(this.recruitButton);
     this.root.addChild(this.continueButton);
+    this.root.addChild(this.perkChoice);
   }
 
   onEnter(payload?: unknown): void {
@@ -98,14 +105,37 @@ export class RewardsState implements IGameState {
     }
 
     this.choiceTaken = false;
+    this.perkChoicePending = false;
+    this.perkChoice.hide();
+
+    const alreadyRewarded = campaign.runState.lastRewardedNodeId === resolvedResult.scenario.nodeId;
+    const scaling = getScaling(campaign.runState.step, campaign.runState.difficultyMode);
+    const perkMods = getCombinedPerkMods(campaign.perkState.pickedPerkIds);
+
+    let goldGain = 0;
+    let recruitsGain = 0;
+    let fieldMedicBonus = 0;
+
+    if (!alreadyRewarded) {
+      campaign.runState.battleNodesCleared += 1;
+      campaign.runState.lastRewardedNodeId = resolvedResult.scenario.nodeId;
+
+      const victory = resolvedResult.victory;
+      const scaledGold = Math.round(resolvedResult.scenario.goldReward * scaling.rewardGoldMult);
+      const scaledRecruits = Math.round(resolvedResult.scenario.recruitsReward * (0.95 + (scaling.rewardGoldMult - 1) * 0.8));
+
+      goldGain = victory ? scaledGold : Math.round(scaledGold * 0.45);
+      recruitsGain = victory ? scaledRecruits : Math.max(3, Math.round(scaledRecruits * 0.5));
+      fieldMedicBonus = Math.max(
+        0,
+        Math.round(resolvedResult.playerCasualties * perkMods.fieldMedicRecruitsPerCasualty),
+      );
+
+      campaign.armyState.gold += goldGain;
+      campaign.armyState.recruits += recruitsGain + fieldMedicBonus;
+    }
 
     const victory = resolvedResult.victory;
-    const goldGain = victory ? resolvedResult.scenario.goldReward : Math.round(resolvedResult.scenario.goldReward * 0.45);
-    const recruitsGain =
-      victory ? resolvedResult.scenario.recruitsReward : Math.max(3, Math.round(resolvedResult.scenario.recruitsReward * 0.5));
-
-    campaign.armyState.gold += goldGain;
-    campaign.armyState.recruits += recruitsGain;
 
     this.title.text = victory ? 'Victory Rewards' : 'Defeat Spoils';
     this.summary.text = [
@@ -113,8 +143,17 @@ export class RewardsState implements IGameState {
       `Objective: ${objectiveDisplayName(resolvedResult.scenario.objectiveType)}`,
       `Player casualties: ${resolvedResult.playerCasualties}`,
       `Enemy casualties: ${resolvedResult.enemyCasualties}`,
+      `Mode: ${campaign.runState.difficultyMode}`,
     ].join('\n');
-    this.rewardInfo.text = `Gold +${goldGain}    Recruits +${recruitsGain}\nChoose one bonus:`;
+    this.rewardInfo.text = alreadyRewarded
+      ? 'Rewards already claimed for this node.\nChoose one bonus:'
+      : `Gold +${goldGain}    Recruits +${recruitsGain}${
+          fieldMedicBonus > 0 ? ` (+${fieldMedicBonus} Field Medic)` : ''
+        }\nChoose one bonus:`;
+
+    if (!alreadyRewarded) {
+      this.maybeOfferPerk(campaign);
+    }
 
     this.refreshButtons();
     this.layout();
@@ -123,6 +162,7 @@ export class RewardsState implements IGameState {
   }
 
   onExit(): void {
+    this.perkChoice.hide();
     this.root.removeFromParent();
   }
 
@@ -147,7 +187,7 @@ export class RewardsState implements IGameState {
   }
 
   private applyUpgradeChoice(): void {
-    if (this.choiceTaken) {
+    if (this.choiceTaken || this.perkChoicePending) {
       return;
     }
 
@@ -189,7 +229,7 @@ export class RewardsState implements IGameState {
   }
 
   private applyRecruitChoice(): void {
-    if (this.choiceTaken) {
+    if (this.choiceTaken || this.perkChoicePending) {
       return;
     }
 
@@ -242,9 +282,10 @@ export class RewardsState implements IGameState {
       this.upgradeButton.setLabel('Upgrade Squad');
     }
 
-    this.upgradeButton.setEnabled(!this.choiceTaken && hasUpgradeable);
-    this.recruitButton.setEnabled(!this.choiceTaken);
-    this.continueButton.setEnabled(this.choiceTaken || !hasUpgradeable);
+    const canUseChoices = !this.perkChoicePending;
+    this.upgradeButton.setEnabled(canUseChoices && !this.choiceTaken && hasUpgradeable);
+    this.recruitButton.setEnabled(canUseChoices && !this.choiceTaken);
+    this.continueButton.setEnabled(canUseChoices && (this.choiceTaken || !hasUpgradeable));
   }
 
   private layout(): void {
@@ -262,5 +303,45 @@ export class RewardsState implements IGameState {
     this.upgradeButton.position.set(width * 0.5 - 180, 365);
     this.recruitButton.position.set(width * 0.5 - 180, 423);
     this.continueButton.position.set(width * 0.5 - 110, 500);
+    this.perkChoice.resize(width, height);
+  }
+
+  private maybeOfferPerk(campaign: CampaignData): void {
+    const rewardRules = contentManager.getPerkRewardRules();
+    if (!shouldOfferPerk(campaign.runState, rewardRules, campaign.perkState)) {
+      return;
+    }
+
+    const choices = getDeterministicPerkChoices(
+      campaign.runState,
+      campaign.perkState,
+      rewardRules.choices,
+      contentManager.getPerkPool(),
+    );
+    if (choices.length === 0) {
+      campaign.perkState.lastOfferedAtBattleCount = campaign.runState.battleNodesCleared;
+      return;
+    }
+
+    this.perkChoicePending = true;
+    this.perkChoice.show(choices, (perkId) => this.applyPerkChoice(perkId), this.context.app.screen.width, this.context.app.screen.height);
+  }
+
+  private applyPerkChoice(perkId: string): void {
+    const campaign = this.context.getCampaignData();
+    if (campaign === null || !this.perkChoicePending) {
+      return;
+    }
+
+    if (!campaign.perkState.pickedPerkIds.includes(perkId)) {
+      campaign.perkState.pickedPerkIds.push(perkId);
+    }
+    campaign.perkState.lastOfferedAtBattleCount = campaign.runState.battleNodesCleared;
+    const perk = contentManager.getPerk(perkId);
+    this.rewardInfo.text += `\nPerk selected: ${perk ? perk.name : perkId}.`;
+
+    this.perkChoicePending = false;
+    this.perkChoice.hide();
+    this.refreshButtons();
   }
 }

@@ -14,8 +14,10 @@ export function applyChargeCounter(
     return burstDamage;
   }
 
-  attacker.applyDamage(CAVALRY_VS_SPEAR_COUNTER_DAMAGE);
+  const spearCounterMult = Math.max(0.4, defender.squad.perkMods.spearCounterDamageMult);
+  attacker.applyDamage(CAVALRY_VS_SPEAR_COUNTER_DAMAGE * spearCounterMult);
   attacker.velocity.scale(CAVALRY_VS_SPEAR_COUNTER_SLOW);
 
-  return burstDamage * clamp(CAVALRY_VS_SPEAR_BURST_MULTIPLIER, 0, 1);
+  const burstMultiplier = clamp(CAVALRY_VS_SPEAR_BURST_MULTIPLIER / spearCounterMult, 0.1, 1);
+  return burstDamage * burstMultiplier;
 }

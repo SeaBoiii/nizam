@@ -1,4 +1,5 @@
 import type { SquadMeta } from './Army';
+import type { DifficultyMode } from './Difficulty';
 import type { NodeType } from '../overworld/types';
 import type { BattleObjectiveType } from '../sim/objectives/ObjectiveTypes';
 
@@ -13,6 +14,9 @@ export interface BattleScenario {
   escortTimeLimitSeconds?: number;
   objectiveSeed: number;
   difficultyTier: number;
+  difficultyMode: DifficultyMode;
+  enemyAIFrequencyMult: number;
+  holdoutWaveStrengthMult: number;
   enemySquads: SquadMeta[];
   goldReward: number;
   recruitsReward: number;

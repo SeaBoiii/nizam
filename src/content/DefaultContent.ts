@@ -1,6 +1,7 @@
 import type {
   NodesTuningContent,
   ObjectivesTuningContent,
+  PerksContent,
   ScenariosContent,
   UnitsContent,
   UpgradePathsContent,
@@ -281,6 +282,112 @@ export const DEFAULT_UPGRADES_CONTENT: UpgradePathsContent = {
       costByTier: { '2': 0, '3': 0 },
     },
   },
+};
+
+export const DEFAULT_PERKS_CONTENT: PerksContent = {
+  version: 'perks_v1',
+  rewardRules: {
+    everyNNodes: 3,
+    choices: 3,
+  },
+  perks: [
+    {
+      id: 'iron_discipline',
+      name: 'Iron Discipline',
+      desc: 'Rout slower and morale recovers faster.',
+      rarity: 'common',
+      mods: {
+        moraleRegenMult: 1.25,
+        routThresholdAdd: -5,
+      },
+    },
+    {
+      id: 'tight_ranks',
+      name: 'Tight Ranks',
+      desc: 'Improved cohesion with denser lines.',
+      rarity: 'common',
+      mods: {
+        cohesionMult: 1.25,
+        formationSpacingMult: 0.9,
+      },
+    },
+    {
+      id: 'blessed_arrows',
+      name: 'Blessed Arrows',
+      desc: 'Archers fire truer and faster shots.',
+      rarity: 'rare',
+      mods: {
+        rangedAccuracyAdd: 0.08,
+        projectileSpeedMult: 1.15,
+      },
+    },
+    {
+      id: 'thunder_charge',
+      name: 'Thunder Charge',
+      desc: 'Charge impact increases with faster resets.',
+      rarity: 'rare',
+      mods: {
+        chargePowerMult: 1.2,
+        chargeCooldownMult: 0.85,
+      },
+    },
+    {
+      id: 'brace',
+      name: 'Brace',
+      desc: 'Spear formations punish cavalry charges harder.',
+      rarity: 'common',
+      mods: {
+        spearCounterDamageMult: 1.25,
+      },
+    },
+    {
+      id: 'war_drums',
+      name: 'War Drums',
+      desc: 'Battle rhythm reduces morale shock.',
+      rarity: 'common',
+      mods: {
+        moraleLossMult: 0.9,
+      },
+    },
+    {
+      id: 'swift_muster',
+      name: 'Swift Muster',
+      desc: 'Faster redeployments with looser staging.',
+      rarity: 'common',
+      mods: {
+        formationSpacingMult: 1.1,
+        cohesionMult: 0.95,
+        moveSpeedMult: 1.08,
+      },
+    },
+    {
+      id: 'siegecraft',
+      name: 'Siegecraft',
+      desc: 'Capture progress advances more quickly.',
+      rarity: 'rare',
+      mods: {
+        captureRateMult: 1.15,
+      },
+    },
+    {
+      id: 'hardened_steel',
+      name: 'Hardened Steel',
+      desc: 'Armor holds better under pressure.',
+      rarity: 'rare',
+      mods: {
+        armorEffectivenessMult: 1.1,
+      },
+    },
+    {
+      id: 'field_medic',
+      name: 'Field Medic',
+      desc: 'Recover extra recruits from post-battle survivors.',
+      rarity: 'common',
+      mods: {
+        fieldMedicRecruitsPerCasualty: 0.12,
+      },
+    },
+  ],
 };
 
 export const DEFAULT_OBJECTIVES_CONTENT: ObjectivesTuningContent = {

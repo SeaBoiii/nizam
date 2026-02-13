@@ -1,6 +1,7 @@
 import { Container, Graphics, Text } from 'pixi.js';
 import type { IGameState } from './IGameState';
 import type { StateContext } from './StateContext';
+import { DifficultyMode } from '../../meta/Difficulty';
 import { TextButton } from '../../ui/widgets/TextButton';
 
 export class TitleState implements IGameState {
@@ -31,10 +32,21 @@ export class TitleState implements IGameState {
       fontSize: 14,
     },
   });
+  private readonly difficultyText = new Text({
+    text: '',
+    style: {
+      fill: 0xf1d79d,
+      fontFamily: 'monospace',
+      fontSize: 16,
+    },
+  });
 
   private readonly newRunButton: TextButton;
   private readonly continueButton: TextButton;
   private readonly clearButton: TextButton;
+  private readonly normalButton: TextButton;
+  private readonly hardButton: TextButton;
+  private selectedDifficulty = DifficultyMode.NORMAL;
 
   constructor(private readonly context: StateContext) {
     this.root.addChild(this.bg);
@@ -46,7 +58,7 @@ export class TitleState implements IGameState {
     this.newRunButton = new TextButton({
       label: 'New Run',
       onClick: () => {
-        this.context.startNewRun();
+        this.context.startNewRun(this.selectedDifficulty);
         this.context.transitionTo('OVERWORLD');
       },
     });
@@ -72,18 +84,39 @@ export class TitleState implements IGameState {
       },
     });
 
+    this.normalButton = new TextButton({
+      label: 'Normal',
+      width: 130,
+      onClick: () => {
+        this.selectedDifficulty = DifficultyMode.NORMAL;
+        this.refreshDifficultyButtons();
+      },
+    });
+    this.hardButton = new TextButton({
+      label: 'Hard',
+      width: 130,
+      onClick: () => {
+        this.selectedDifficulty = DifficultyMode.HARD;
+        this.refreshDifficultyButtons();
+      },
+    });
+
     this.root.addChild(this.title);
     this.root.addChild(this.subtitle);
     this.root.addChild(this.status);
+    this.root.addChild(this.difficultyText);
     this.root.addChild(this.newRunButton);
     this.root.addChild(this.continueButton);
     this.root.addChild(this.clearButton);
+    this.root.addChild(this.normalButton);
+    this.root.addChild(this.hardButton);
   }
 
   onEnter(): void {
     this.context.stage.addChild(this.root);
     this.layout();
     this.refreshContinueState();
+    this.refreshDifficultyButtons();
     this.status.text = '';
   }
 
@@ -113,10 +146,24 @@ export class TitleState implements IGameState {
 
     this.title.position.set(width * 0.5, height * 0.24);
     this.subtitle.position.set(width * 0.5, height * 0.33);
-    this.status.position.set(width * 0.5, height * 0.77);
+    this.status.position.set(width * 0.5, height * 0.81);
 
-    this.newRunButton.position.set(width * 0.5 - 110, height * 0.45);
-    this.continueButton.position.set(width * 0.5 - 110, height * 0.53);
-    this.clearButton.position.set(width * 0.5 - 110, height * 0.61);
+    this.difficultyText.position.set(width * 0.5 - 130, height * 0.43);
+    this.newRunButton.position.set(width * 0.5 - 110, height * 0.47);
+    this.continueButton.position.set(width * 0.5 - 110, height * 0.55);
+    this.clearButton.position.set(width * 0.5 - 110, height * 0.63);
+    this.normalButton.position.set(width * 0.5 - 134, height * 0.72);
+    this.hardButton.position.set(width * 0.5 + 4, height * 0.72);
+  }
+
+  private refreshDifficultyButtons(): void {
+    this.difficultyText.text = `Difficulty: ${this.selectedDifficulty}`;
+    if (this.selectedDifficulty === DifficultyMode.NORMAL) {
+      this.normalButton.setLabel('[Normal]');
+      this.hardButton.setLabel('Hard');
+    } else {
+      this.normalButton.setLabel('Normal');
+      this.hardButton.setLabel('[Hard]');
+    }
   }
 }

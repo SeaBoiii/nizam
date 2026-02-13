@@ -5,6 +5,9 @@ import type {
   NodeDepthWeightsContent,
   NodesTuningContent,
   ObjectivesTuningContent,
+  PerkContent,
+  PerkRewardRulesContent,
+  PerksContent,
   ScenarioDepthBucketContent,
   ScenariosContent,
   UnitArchetypeContent,
@@ -14,6 +17,7 @@ import type {
 import {
   DEFAULT_NODES_CONTENT,
   DEFAULT_OBJECTIVES_CONTENT,
+  DEFAULT_PERKS_CONTENT,
   DEFAULT_SCENARIOS_CONTENT,
   DEFAULT_UNITS_CONTENT,
   DEFAULT_UPGRADES_CONTENT,
@@ -107,6 +111,23 @@ function cloneUpgradesContent(content: UpgradePathsContent): UpgradePathsContent
     maxTier: content.maxTier,
     defaultUpgradeCost: content.defaultUpgradeCost,
     paths,
+  };
+}
+
+function clonePerksContent(content: PerksContent): PerksContent {
+  return {
+    version: content.version,
+    perks: content.perks.map((perk) => ({
+      id: perk.id,
+      name: perk.name,
+      desc: perk.desc,
+      rarity: perk.rarity,
+      mods: { ...perk.mods },
+    })),
+    rewardRules: {
+      everyNNodes: content.rewardRules.everyNNodes,
+      choices: content.rewardRules.choices,
+    },
   };
 }
 
@@ -225,6 +246,7 @@ function cloneScenariosContent(content: ScenariosContent): ScenariosContent {
 const DEFAULT_CONTENT: LoadedContent = {
   units: cloneUnitsContent(DEFAULT_UNITS_CONTENT),
   upgrades: cloneUpgradesContent(DEFAULT_UPGRADES_CONTENT),
+  perks: clonePerksContent(DEFAULT_PERKS_CONTENT),
   objectives: cloneObjectivesContent(DEFAULT_OBJECTIVES_CONTENT),
   nodes: cloneNodesContent(DEFAULT_NODES_CONTENT),
   scenarios: cloneScenariosContent(DEFAULT_SCENARIOS_CONTENT),
@@ -234,6 +256,7 @@ function cloneLoadedContent(content: LoadedContent): LoadedContent {
   return {
     units: cloneUnitsContent(content.units),
     upgrades: cloneUpgradesContent(content.upgrades),
+    perks: clonePerksContent(content.perks),
     objectives: cloneObjectivesContent(content.objectives),
     nodes: cloneNodesContent(content.nodes),
     scenarios: cloneScenariosContent(content.scenarios),
@@ -362,6 +385,52 @@ function isValidUpgradesContent(value: unknown): value is UpgradePathsContent {
       return false;
     }
     if (!asObject(path.nextTierByTier) || !asObject(path.costByTier)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isValidPerkContent(value: unknown): value is PerkContent {
+  const candidate = asObject(value);
+  if (!candidate) {
+    return false;
+  }
+  if (
+    typeof candidate.id !== 'string' ||
+    typeof candidate.name !== 'string' ||
+    typeof candidate.desc !== 'string' ||
+    (candidate.rarity !== 'common' && candidate.rarity !== 'rare')
+  ) {
+    return false;
+  }
+  const mods = asObject(candidate.mods);
+  if (!mods) {
+    return false;
+  }
+
+  const modKeys = Object.keys(mods);
+  for (let i = 0; i < modKeys.length; i += 1) {
+    if (!isFiniteNumber(mods[modKeys[i]])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isValidPerksContent(value: unknown): value is PerksContent {
+  const candidate = asObject(value);
+  if (!candidate || typeof candidate.version !== 'string' || !Array.isArray(candidate.perks)) {
+    return false;
+  }
+
+  const rewardRules = asObject(candidate.rewardRules);
+  if (!rewardRules || !isFiniteNumber(rewardRules.everyNNodes) || !isFiniteNumber(rewardRules.choices)) {
+    return false;
+  }
+
+  for (let i = 0; i < candidate.perks.length; i += 1) {
+    if (!isValidPerkContent(candidate.perks[i])) {
       return false;
     }
   }
@@ -596,18 +665,19 @@ type Validator<T> = (value: unknown) => value is T;
 export class ContentManager {
   private content: LoadedContent = cloneLoadedContent(DEFAULT_CONTENT);
   private status: ContentLoadStatus = {
-    loaded: false,
-    fallbackUsed: false,
-    contentVersion: DEFAULT_CONTENT.units.contentVersion,
-    errors: [],
-    sourceByFile: {
-      units: 'default',
-      upgrades: 'default',
-      objectives: 'default',
-      nodes: 'default',
-      scenarios: 'default',
-    },
-  };
+      loaded: false,
+      fallbackUsed: false,
+      contentVersion: DEFAULT_CONTENT.units.contentVersion,
+      errors: [],
+      sourceByFile: {
+        units: 'default',
+        upgrades: 'default',
+        perks: 'default',
+        objectives: 'default',
+        nodes: 'default',
+        scenarios: 'default',
+      },
+    };
   private readonly listeners = new Set<() => void>();
 
   async loadAll(options: LoadOptions = {}): Promise<ContentLoadStatus> {
@@ -616,6 +686,7 @@ export class ContentManager {
     const sourceByFile: ContentLoadStatus['sourceByFile'] = {
       units: 'json',
       upgrades: 'json',
+      perks: 'json',
       objectives: 'json',
       nodes: 'json',
       scenarios: 'json',
@@ -634,6 +705,10 @@ export class ContentManager {
     );
     if (upgrades.source === 'default') {
       sourceByFile.upgrades = 'default';
+    }
+    const perks = await this.loadFile('perks', isValidPerksContent, clonePerksContent(DEFAULT_PERKS_CONTENT), forceReload, errors);
+    if (perks.source === 'default') {
+      sourceByFile.perks = 'default';
     }
     const objectives = await this.loadFile(
       'objectives',
@@ -663,6 +738,7 @@ export class ContentManager {
     this.content = {
       units: units.value,
       upgrades: upgrades.value,
+      perks: perks.value,
       objectives: objectives.value,
       nodes: nodes.value,
       scenarios: scenarios.value,
@@ -671,6 +747,7 @@ export class ContentManager {
     const fallbackUsed =
       sourceByFile.units === 'default' ||
       sourceByFile.upgrades === 'default' ||
+      sourceByFile.perks === 'default' ||
       sourceByFile.objectives === 'default' ||
       sourceByFile.nodes === 'default' ||
       sourceByFile.scenarios === 'default';
@@ -802,6 +879,39 @@ export class ContentManager {
     return Math.max(0, cost);
   }
 
+  getPerk(perkId: string): PerkContent | null {
+    for (let i = 0; i < this.content.perks.perks.length; i += 1) {
+      if (this.content.perks.perks[i].id === perkId) {
+        const perk = this.content.perks.perks[i];
+        return {
+          id: perk.id,
+          name: perk.name,
+          desc: perk.desc,
+          rarity: perk.rarity,
+          mods: { ...perk.mods },
+        };
+      }
+    }
+    return null;
+  }
+
+  getPerkPool(): PerkContent[] {
+    return this.content.perks.perks.map((perk) => ({
+      id: perk.id,
+      name: perk.name,
+      desc: perk.desc,
+      rarity: perk.rarity,
+      mods: { ...perk.mods },
+    }));
+  }
+
+  getPerkRewardRules(): PerkRewardRulesContent {
+    return {
+      everyNNodes: this.content.perks.rewardRules.everyNNodes,
+      choices: this.content.perks.rewardRules.choices,
+    };
+  }
+
   getObjectiveTuning(): ObjectivesTuningContent {
     return cloneObjectivesContent(this.content.objectives);
   }
@@ -818,6 +928,7 @@ export class ContentManager {
     const first =
       this.content.units.contentVersion ||
       this.content.upgrades.contentVersion ||
+      this.content.perks.version ||
       this.content.objectives.contentVersion ||
       this.content.nodes.contentVersion ||
       this.content.scenarios.contentVersion;

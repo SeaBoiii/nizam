@@ -23,6 +23,7 @@ export function computeDamage(attacker: Soldier, defender: Soldier, baseDamage: 
     amount *= SHIELD_FRONT_MULTIPLIER;
   }
 
-  amount -= defender.baseStats.armor * ARMOR_REDUCTION;
+  const armorEffectiveness = Math.max(0.2, defender.squad.perkMods.armorEffectivenessMult);
+  amount -= defender.baseStats.armor * ARMOR_REDUCTION * armorEffectiveness;
   return Math.max(MIN_DAMAGE, amount);
 }

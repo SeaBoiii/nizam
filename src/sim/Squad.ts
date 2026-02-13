@@ -3,6 +3,7 @@ import { clamp, damp, rotateTowardAngle, shortestAngleDelta } from '../utils/mat
 import { Vec2 } from '../utils/vec2';
 import { computeSlotLocal, estimateFormationRadius } from './Formation';
 import { skirmishThreatRange } from './orders/RangedOrders';
+import { DEFAULT_PERK_MODS, type CombinedPerkMods } from './rules/PerkMods';
 import type { Waypoint } from './Orders';
 import { SKIRMISH_ADVANCE_SPEED_FACTOR, SKIRMISH_RETREAT_DISTANCE, SKIRMISH_RETREAT_SPEED_FACTOR } from './rules/Constants';
 import { Soldier } from './Soldier';
@@ -32,6 +33,7 @@ interface SquadOptions {
   unitLayer: Container;
   overlayLayer: Container;
   commandable?: boolean;
+  perkMods?: Readonly<CombinedPerkMods>;
 }
 
 export interface SquadUpdateContext {
@@ -50,6 +52,7 @@ export class Squad {
   readonly soldiers: Soldier[] = [];
   readonly initialSize: number;
   readonly commandable: boolean;
+  readonly perkMods: Readonly<CombinedPerkMods>;
   readonly anchor: Vec2;
   readonly anchorVelocity = new Vec2();
   readonly holdAnchor = new Vec2();
@@ -83,6 +86,7 @@ export class Squad {
     this.facing = options.facing;
     this.initialSize = options.soldierCount;
     this.commandable = options.commandable ?? true;
+    this.perkMods = options.perkMods ?? DEFAULT_PERK_MODS;
 
     this.selectionOutline = new Graphics();
     this.selectionOutline.visible = false;
@@ -239,7 +243,8 @@ export class Squad {
       this.morale = 100;
     }
 
-    if (usesMorale && this.order !== 'rout' && this.morale < 25) {
+    const routThreshold = clamp(25 + this.perkMods.routThresholdAdd, 5, 95);
+    if (usesMorale && this.order !== 'rout' && this.morale < routThreshold) {
       this.enterRout(context.world);
     }
 
@@ -251,33 +256,37 @@ export class Squad {
     this.updateSoldiers(context);
     this.updateSelectionOverlay();
 
-    if (usesMorale && this.order === 'rout' && (this.morale > 35 || this.reachedMapEdge)) {
+    const recoverThreshold = clamp(35 + this.perkMods.routThresholdAdd, 10, 100);
+    if (usesMorale && this.order === 'rout' && (this.morale > recoverThreshold || this.reachedMapEdge)) {
       this.holdPosition();
     }
   }
 
   private updateMorale(context: SquadUpdateContext): void {
+    const moraleRegenMult = Math.max(0.1, this.perkMods.moraleRegenMult);
+    const moraleLossMult = Math.max(0.1, this.perkMods.moraleLossMult);
+
     const alive = this.aliveCount();
     this.casualties = this.initialSize - alive;
 
     const casualtyDelta = this.casualties - this.lastCasualties;
     if (casualtyDelta > 0) {
-      this.morale -= casualtyDelta * 2.8;
+      this.morale -= casualtyDelta * 2.8 * moraleLossMult;
     }
 
     const flanked = this.isFlanked(context.allSquads);
     if (flanked) {
-      this.morale -= 10 * context.dt;
+      this.morale -= 10 * context.dt * moraleLossMult;
     } else {
-      this.morale += 2.6 * context.dt;
+      this.morale += 2.6 * context.dt * moraleRegenMult;
     }
 
     if (this.order === 'hold') {
-      this.morale += 1.2 * context.dt;
+      this.morale += 1.2 * context.dt * moraleRegenMult;
     }
 
     if (this.order === 'rout') {
-      this.morale += 1 * context.dt;
+      this.morale += 1 * context.dt * moraleRegenMult;
     }
 
     this.morale = clamp(this.morale, 0, 100);
@@ -317,12 +326,12 @@ export class Squad {
     switch (this.order) {
       case 'hold': {
         this.chargeTarget = null;
-        this.driveAnchorToward(this.holdAnchor, context.dt, this.archetype.stats.moveSpeed * 0.35);
+        this.driveAnchorToward(this.holdAnchor, context.dt, this.perkedMoveSpeed(this.archetype.stats.moveSpeed * 0.35));
         break;
       }
       case 'volley': {
         this.chargeTarget = null;
-        this.driveAnchorToward(this.holdAnchor, context.dt, this.archetype.stats.moveSpeed * 0.3);
+        this.driveAnchorToward(this.holdAnchor, context.dt, this.perkedMoveSpeed(this.archetype.stats.moveSpeed * 0.3));
         break;
       }
       case 'skirmish': {
@@ -368,8 +377,8 @@ export class Squad {
     const waypoint = this.waypoints[0];
     const maxSpeed =
       this.order === 'rout'
-        ? this.archetype.stats.moveSpeed * ANCHOR_ROUT_SPEED_BONUS
-        : this.archetype.stats.moveSpeed;
+        ? this.perkedMoveSpeed(this.archetype.stats.moveSpeed * ANCHOR_ROUT_SPEED_BONUS)
+        : this.perkedMoveSpeed(this.archetype.stats.moveSpeed);
     this.driveAnchorToward(waypoint.position, context.dt, maxSpeed);
 
     const distSq = this.anchor.distanceSqTo(waypoint.position);
@@ -408,14 +417,14 @@ export class Squad {
     const toTargetX = target.anchor.x - this.anchor.x;
     const toTargetY = target.anchor.y - this.anchor.y;
     this.desiredFacing = Math.atan2(toTargetY, toTargetX);
-    this.driveAnchorToward(target.anchor, dt, this.archetype.stats.moveSpeed * ANCHOR_CHARGE_SPEED_BONUS);
+    this.driveAnchorToward(target.anchor, dt, this.perkedMoveSpeed(this.archetype.stats.moveSpeed * ANCHOR_CHARGE_SPEED_BONUS));
   }
 
   private runSkirmish(context: SquadUpdateContext): void {
     const target = this.findNearestEnemy(context.allSquads);
     this.chargeTarget = target;
 
-    const moveSpeed = this.archetype.stats.moveSpeed;
+    const moveSpeed = this.perkedMoveSpeed(this.archetype.stats.moveSpeed);
     if (target === null) {
       this.driveAnchorToward(
         context.objectivePosition,
@@ -557,12 +566,14 @@ export class Squad {
   private updateSoldiers(context: SquadUpdateContext): void {
     const chargeOrder = this.order === 'charge';
     const skirmishOrder = this.order === 'skirmish';
-    const slotScale = chargeOrder ? 1.2 : skirmishOrder ? 1.08 : 1;
+    const slotScale =
+      (chargeOrder ? 1.2 : skirmishOrder ? 1.08 : 1) * Math.max(0.65, this.perkMods.formationSpacingMult);
+    const cohesionMult = Math.max(0.45, this.perkMods.cohesionMult);
     const separationWeight = chargeOrder
-      ? SEPARATION_WEIGHT * 0.8
+      ? (SEPARATION_WEIGHT * 0.8) / cohesionMult
       : skirmishOrder
-        ? SEPARATION_WEIGHT * 0.95
-        : SEPARATION_WEIGHT;
+        ? (SEPARATION_WEIGHT * 0.95) / cohesionMult
+        : SEPARATION_WEIGHT / cohesionMult;
 
     for (let i = 0; i < this.soldiers.length; i += 1) {
       const soldier = this.soldiers[i];
@@ -623,7 +634,7 @@ export class Squad {
       const toTargetY = targetY - soldier.position.y;
       const targetDist = Math.hypot(toTargetX, toTargetY);
 
-      let moveSpeed = soldier.baseStats.moveSpeed;
+      let moveSpeed = this.perkedMoveSpeed(soldier.baseStats.moveSpeed);
       if (this.order === 'charge') {
         moveSpeed *= 1.1;
       } else if (this.order === 'rout') {
@@ -647,7 +658,7 @@ export class Squad {
       let accelX = desiredVx - soldier.velocity.x + separationX * separationWeight;
       let accelY = desiredVy - soldier.velocity.y + separationY * separationWeight;
       const accelLen = Math.hypot(accelX, accelY);
-      const accelLimit = (SOLDIER_ACCEL_BASE / soldier.mass) * context.dt;
+      const accelLimit = (SOLDIER_ACCEL_BASE / soldier.mass) * cohesionMult * context.dt;
       if (accelLen > accelLimit && accelLen > 0.0001) {
         const scale = accelLimit / accelLen;
         accelX *= scale;
@@ -700,6 +711,10 @@ export class Squad {
     this.label.alpha = this.isSelected ? 1 : 0.76;
     this.label.text = `S${this.id} ${this.archetype.name} ${Math.round(this.morale)}%`;
     this.label.position.set(this.anchor.x, this.anchor.y - radius - 8);
+  }
+
+  private perkedMoveSpeed(baseSpeed: number): number {
+    return baseSpeed * Math.max(0.5, this.perkMods.moveSpeedMult);
   }
 
   private getSlotWorldForIndex(slotIndex: number, out: Vec2, slotScale = 1): Vec2 {

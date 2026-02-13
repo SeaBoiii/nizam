@@ -51,7 +51,8 @@ export class RangedSystem {
           continue;
         }
 
-        const projectileSpeed = unit.baseStats.projectileSpeed;
+        const perkMods = unit.squad.perkMods;
+        const projectileSpeed = unit.baseStats.projectileSpeed * Math.max(0.2, perkMods.projectileSpeedMult);
         if (projectileSpeed <= 0.0001) {
           continue;
         }
@@ -74,7 +75,7 @@ export class RangedSystem {
         dirX *= invDirLen;
         dirY *= invDirLen;
 
-        const accuracy = clamp(unit.baseStats.accuracy, 0, 1);
+        const accuracy = clamp(unit.baseStats.accuracy + perkMods.rangedAccuracyAdd, 0, 1);
         let spread = ARCHER_BASE_SPREAD_RADIANS * (1 - accuracy);
         if (unit.velocity.lenSq() > ARCHER_MOVING_SPEED_THRESHOLD * ARCHER_MOVING_SPEED_THRESHOLD) {
           spread *= ARCHER_MOVING_SPREAD_MULTIPLIER;

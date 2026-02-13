@@ -13,7 +13,7 @@ import {
   squadRole,
 } from './Tactics';
 
-const AI_ORDER_INTERVAL = 1;
+const BASE_AI_ORDER_INTERVAL = 1;
 const CLOSE_TO_POINT_SQ = 70 * 70;
 
 interface AIDirectorContext {
@@ -24,6 +24,7 @@ interface AIDirectorContext {
 
 export class AIDirector {
   private decisionTimer = 0;
+  private orderFrequencyMult = 1;
 
   private readonly enemySquads: Squad[] = [];
   private readonly playerSquads: Squad[] = [];
@@ -37,7 +38,7 @@ export class AIDirector {
     if (this.decisionTimer > 0) {
       return;
     }
-    this.decisionTimer = AI_ORDER_INTERVAL;
+    this.decisionTimer = BASE_AI_ORDER_INTERVAL / this.orderFrequencyMult;
 
     livingTeamSquads(context.squads, TeamId.Red, this.enemySquads);
     livingTeamSquads(context.squads, TeamId.Blue, this.playerSquads);
@@ -349,5 +350,9 @@ export class AIDirector {
 
   private angleTo(target: Vec2, from: Vec2): number {
     return Math.atan2(target.y - from.y, target.x - from.x);
+  }
+
+  setOrderFrequencyMultiplier(multiplier: number): void {
+    this.orderFrequencyMult = Math.max(0.5, Math.min(2.5, multiplier));
   }
 }

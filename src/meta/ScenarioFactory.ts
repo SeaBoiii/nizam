@@ -1,5 +1,6 @@
 import { contentManager } from '../content/ContentManager';
 import type { SquadMeta, ArmyState } from './Army';
+import { getScaling } from './Difficulty';
 import { clampTier } from './Progression';
 import type { BattleScenario } from './types';
 import type { NodeType, RunState } from '../overworld/types';
@@ -114,6 +115,8 @@ function resolveEnemySquads(
   nodeType: NodeType,
   objectiveType: BattleObjectiveType,
   runState: RunState,
+  enemySizeMult: number,
+  enemyTierBonus: number,
   rng: SeededRng,
 ): SquadMeta[] {
   const scenarios = contentManager.getScenarioTuning();
@@ -132,12 +135,12 @@ function resolveEnemySquads(
   const objectiveScale = scenarios.objectivePowerScale[objectiveType];
   const difficultyScale = 1 + (difficultyTier - 1) * 0.06;
   const nodeScale = nodeType === 'BOSS' ? 1.16 : nodeType === 'ELITE' ? 1.08 : 1;
-  const totalScale = Math.max(0.45, objectiveScale * difficultyScale * nodeScale);
+  const totalScale = Math.max(0.45, objectiveScale * difficultyScale * nodeScale * enemySizeMult);
 
   const squads: SquadMeta[] = [];
   for (let i = 0; i < template.squads.length; i += 1) {
     const source = template.squads[i];
-    const bonusTier = nodeType === 'BOSS' ? 1 : nodeType === 'ELITE' && difficultyTier >= 3 ? 1 : 0;
+    const bonusTier = (nodeType === 'BOSS' ? 1 : nodeType === 'ELITE' && difficultyTier >= 3 ? 1 : 0) + enemyTierBonus;
     squads.push(
       createEnemySquad(
         `enemy_${runState.step}_${i}`,
@@ -160,11 +163,19 @@ export function createScenario(
   const rng = new SeededRng(scenarioSeed(nodeId, nodeType, runState));
   const nodeTuning = contentManager.getNodeTuning();
   const objectives = contentManager.getObjectiveTuning();
+  const scaling = getScaling(runState.step, runState.difficultyMode);
 
   const difficultyTier = Math.max(1, runState.difficultyTier);
   const objectiveType = selectObjectiveType(nodeId, nodeType, runState);
   const selectedObjectiveSeed = objectiveSeed(nodeId, nodeType, runState);
-  const enemySquads = resolveEnemySquads(nodeType, objectiveType, runState, rng);
+  const enemySquads = resolveEnemySquads(
+    nodeType,
+    objectiveType,
+    runState,
+    scaling.enemySizeMult,
+    scaling.enemyTierBonus,
+    rng,
+  );
 
   const rewards = nodeTuning.rewardsByNodeType[nodeType];
   const goldReward = sampleReward(rng, rewards.gold, difficultyTier, nodeType);
@@ -189,6 +200,9 @@ export function createScenario(
     escortTimeLimitSeconds,
     objectiveSeed: selectedObjectiveSeed,
     difficultyTier,
+    difficultyMode: runState.difficultyMode,
+    enemyAIFrequencyMult: scaling.enemyAIFrequencyMult,
+    holdoutWaveStrengthMult: scaling.enemySizeMult,
     enemySquads,
     goldReward,
     recruitsReward,

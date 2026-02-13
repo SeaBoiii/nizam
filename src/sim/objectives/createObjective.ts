@@ -2,6 +2,7 @@ import type { BattleScenario } from '../../meta/types';
 import { contentManager } from '../../content/ContentManager';
 import { SeededRng } from '../../utils/rng';
 import { Vec2 } from '../../utils/vec2';
+import { DEFAULT_PERK_MODS, type CombinedPerkMods } from '../rules/PerkMods';
 import type { WorldBounds } from '../types';
 import type { IObjective } from './IObjective';
 import { AssassinateObjective } from './AssassinateObjective';
@@ -9,7 +10,11 @@ import { CapturePointObjective } from './CapturePointObjective';
 import { EscortObjective } from './EscortObjective';
 import { HoldoutObjective } from './HoldoutObjective';
 
-export function createObjectiveForScenario(scenario: BattleScenario, bounds: WorldBounds): IObjective {
+export function createObjectiveForScenario(
+  scenario: BattleScenario,
+  bounds: WorldBounds,
+  playerPerkMods: Readonly<CombinedPerkMods> = DEFAULT_PERK_MODS,
+): IObjective {
   const center = new Vec2(bounds.width * 0.5, bounds.height * 0.5);
   const objectives = contentManager.getObjectiveTuning();
 
@@ -23,6 +28,7 @@ export function createObjectiveForScenario(scenario: BattleScenario, bounds: Wor
         objectives.capture.baseGainRate,
         objectives.capture.contestedDecayRate,
         objectives.capture.opposingProgressDrainFactor,
+        playerPerkMods.captureRateMult,
       );
     case 'ASSASSINATE':
       return new AssassinateObjective(`objective_${scenario.nodeId}`, center);
@@ -42,6 +48,8 @@ export function createObjectiveForScenario(scenario: BattleScenario, bounds: Wor
         waveSizePerDifficulty: objectives.holdout.waveSizePerDifficulty,
         waveSizePerWave: objectives.holdout.waveSizePerWave,
         waveArchetypes: objectives.holdout.waveArchetypes,
+        waveStrengthMultiplier:
+          scenario.holdoutWaveStrengthMult / Math.max(0.25, playerPerkMods.waveStrengthMult),
       });
     case 'ESCORT': {
       const rng = new SeededRng(scenario.objectiveSeed ^ 0xa51d2f3b);

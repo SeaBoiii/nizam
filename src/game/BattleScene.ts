@@ -22,6 +22,8 @@ import type { UnitArchetype } from '../sim/types/UnitArchetype';
 import { createObjectiveForScenario } from '../sim/objectives/createObjective';
 import type { ObjectiveMinimapMarker, ObjectiveSpawnSquadRequest, ObjectiveWorld } from '../sim/objectives/IObjective';
 import { AIDirector } from '../sim/ai/AIDirector';
+import type { CombinedPerkMods } from '../sim/rules/PerkMods';
+import { DEFAULT_PERK_MODS } from '../sim/rules/PerkMods';
 
 const FIXED_DT = 1 / 60;
 const WORLD_WIDTH = 4000;
@@ -34,6 +36,7 @@ interface BattleSceneOptions {
   parent: Container;
   scenario: BattleScenario;
   armyState: ArmyState;
+  playerPerkMods: Readonly<CombinedPerkMods>;
   onFinished: (result: BattleResult) => void;
 }
 
@@ -61,6 +64,7 @@ export class BattleScene {
   private readonly parent: Container;
   private readonly scenario: BattleScenario;
   private readonly armyState: ArmyState;
+  private readonly playerPerkMods: Readonly<CombinedPerkMods>;
   private readonly onFinished: (result: BattleResult) => void;
 
   private readonly worldBounds: WorldBounds = {
@@ -127,9 +131,12 @@ export class BattleScene {
     this.parent = options.parent;
     this.scenario = options.scenario;
     this.armyState = options.armyState;
+    this.playerPerkMods = options.playerPerkMods;
     this.onFinished = options.onFinished;
 
-    this.objectiveManager = new ObjectiveManager(createObjectiveForScenario(this.scenario, this.worldBounds));
+    this.objectiveManager = new ObjectiveManager(
+      createObjectiveForScenario(this.scenario, this.worldBounds, this.playerPerkMods),
+    );
 
     this.root.addChild(this.worldLayer);
     this.worldLayer.addChild(this.mapLayer);
@@ -175,6 +182,7 @@ export class BattleScene {
     this.camera.setViewport(this.app.screen.width, this.app.screen.height);
     this.camera.applyTo(this.worldLayer);
     this.minimap.resize(this.app.screen.width, this.app.screen.height);
+    this.aiDirector.setOrderFrequencyMultiplier(this.scenario.enemyAIFrequencyMult);
 
     this.spawnTeams();
     this.objectiveManager.onStart(this.objectiveWorld);
@@ -266,6 +274,7 @@ export class BattleScene {
         0,
         undefined,
         true,
+        this.playerPerkMods,
       );
     }
 
@@ -283,6 +292,7 @@ export class BattleScene {
         Math.PI,
         undefined,
         true,
+        DEFAULT_PERK_MODS,
       );
     }
   }
@@ -314,6 +324,7 @@ export class BattleScene {
       request.facing,
       request.color,
       request.commandable ?? true,
+      request.team === TeamId.Blue ? this.playerPerkMods : DEFAULT_PERK_MODS,
     );
   }
 
@@ -326,6 +337,7 @@ export class BattleScene {
     facing: number,
     color: number | undefined,
     commandable: boolean,
+    perkMods: Readonly<CombinedPerkMods>,
   ): Squad {
     const squad = new Squad({
       id: this.nextSquadId,
@@ -338,6 +350,7 @@ export class BattleScene {
       unitLayer: this.unitLayer,
       overlayLayer: this.overlayLayer,
       commandable,
+      perkMods,
     });
     this.nextSquadId += 1;
     this.squads.push(squad);

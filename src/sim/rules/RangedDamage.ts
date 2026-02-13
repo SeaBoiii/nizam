@@ -36,6 +36,7 @@ export function computeRangedDamage(projectile: Projectile, defender: Soldier, b
     amount *= RANGED_SHIELD_FRONT_MULTIPLIER;
   }
 
-  amount -= defender.baseStats.armor * RANGED_ARMOR_REDUCTION_MULTIPLIER;
+  const armorEffectiveness = Math.max(0.2, defender.squad.perkMods.armorEffectivenessMult);
+  amount -= defender.baseStats.armor * RANGED_ARMOR_REDUCTION_MULTIPLIER * armorEffectiveness;
   return Math.max(MIN_DAMAGE, amount);
 }

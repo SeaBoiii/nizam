@@ -71,6 +71,7 @@ Gameplay tuning is loaded from JSON files at startup:
 
 - `public/content/units.json`
 - `public/content/upgrades.json`
+- `public/content/perks.json`
 - `public/content/objectives.json`
 - `public/content/nodes.json`
 - `public/content/scenarios.json`
@@ -97,6 +98,7 @@ If a content file is missing or invalid, the game falls back to built-in default
 ## Controls
 
 - Title: click `New Run`, `Continue`, `Reset Save`
+- Title: pick `Normal` or `Hard` before `New Run`
 - Overworld: left click connected nodes to advance, click `Back To Title` to return
 - Battle camera pan: `WASD` or Arrow keys
 - Battle camera zoom: Mouse wheel
@@ -111,7 +113,24 @@ If a content file is missing or invalid, the game falls back to built-in default
 - Battle retreat to map edge: `R`
 - Battle volley (ranged stance): `V`
 - Battle skirmish (kite while shooting): `K`
+- Rewards: when a perk offer appears, click one perk card to continue
 - Debug panel toggle (all states): `F1` or `` ` ``
+
+## Perks + Difficulty (Sprint 6)
+
+- A commander perk draft appears every `N` cleared battle nodes (default: every 3), configured in `public/content/perks.json`.
+- Perk choices are deterministic from run seed + progression count.
+- Picked perks persist in save data and apply to player-side battle systems:
+  - morale/rout behavior
+  - formation cohesion/spacing
+  - charge power/cooldown
+  - ranged accuracy/projectile speed
+  - capture rate
+  - spear anti-charge strength
+  - armor effectiveness
+  - post-battle field medic recruit recovery
+- New Run supports `Normal` and `Hard` modes.
+- Hard mode scales enemies faster by node depth (tier, size, AI order cadence) and grants slightly higher rewards.
 
 ## Battle objectives (Sprint 4)
 

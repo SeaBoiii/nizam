@@ -1,12 +1,22 @@
 import { contentManager } from '../content/ContentManager';
 import type { ArmyState, SquadMeta } from './Army';
+import { DifficultyMode, normalizeDifficultyMode } from './Difficulty';
+import { createPerkState, type PerkState } from './Perks';
 import type { MapState, Node, RunState } from '../overworld/types';
 
 const SAVE_KEY = 'nizam_save_v1';
-const SAVE_VERSION = 2;
+const SAVE_VERSION = 3;
 
 interface LegacySaveV1 {
   version: number;
+  runState: Partial<RunState> & Record<string, unknown>;
+  armyState: Partial<ArmyState> & Record<string, unknown>;
+  mapState: Partial<MapState> & Record<string, unknown>;
+}
+
+interface LegacySaveV2 {
+  saveVersion: number;
+  contentVersion?: string;
   runState: Partial<RunState> & Record<string, unknown>;
   armyState: Partial<ArmyState> & Record<string, unknown>;
   mapState: Partial<MapState> & Record<string, unknown>;
@@ -17,6 +27,7 @@ export interface SaveGameData {
   contentVersion: string;
   runState: RunState;
   armyState: ArmyState;
+  perkState: PerkState;
   mapState: MapState;
 }
 
@@ -57,13 +68,18 @@ function sanitizeRunState(value: unknown): RunState | null {
   const currentNodeId = asString(value.currentNodeId, 'node_0');
   const clearedNodeIds = asStringArray(value.clearedNodeIds, [currentNodeId]);
 
+  const difficultyMode = normalizeDifficultyMode(value.difficultyMode);
+
   return {
     seed: seed >>> 0,
     currentNodeId,
     clearedNodeIds,
     step: Math.max(0, Math.floor(asNumber(value.step, 0))),
     difficultyTier: Math.max(1, Math.floor(asNumber(value.difficultyTier, 1))),
+    difficultyMode,
     restBonusBattles: Math.max(0, Math.floor(asNumber(value.restBonusBattles, 0))),
+    battleNodesCleared: Math.max(0, Math.floor(asNumber(value.battleNodesCleared, 0))),
+    lastRewardedNodeId: asString(value.lastRewardedNodeId, ''),
   };
 }
 
@@ -187,6 +203,42 @@ function sanitizeArmyState(value: unknown): ArmyState | null {
   };
 }
 
+function sanitizePerkState(value: unknown): PerkState {
+  const defaults = createPerkState();
+  if (!isObject(value)) {
+    return defaults;
+  }
+  const pickedPerkIds = asStringArray(value.pickedPerkIds, []);
+  return {
+    pickedPerkIds,
+    lastOfferedAtBattleCount: Math.max(0, Math.floor(asNumber(value.lastOfferedAtBattleCount, 0))),
+  };
+}
+
+function migrateRunState(runState: RunState, mapState: MapState): RunState {
+  let battleNodesCleared = runState.battleNodesCleared;
+  if (battleNodesCleared <= 0) {
+    let battleCount = 0;
+    for (let i = 0; i < mapState.nodes.length; i += 1) {
+      const node = mapState.nodes[i];
+      if (
+        runState.clearedNodeIds.includes(node.id) &&
+        (node.type === 'BATTLE' || node.type === 'ELITE' || node.type === 'BOSS')
+      ) {
+        battleCount += 1;
+      }
+    }
+    battleNodesCleared = battleCount;
+  }
+
+  return {
+    ...runState,
+    difficultyMode: runState.difficultyMode ?? DifficultyMode.NORMAL,
+    battleNodesCleared,
+    lastRewardedNodeId: runState.lastRewardedNodeId ?? '',
+  };
+}
+
 function normalizeSaveShape(raw: unknown): SaveGameData | null {
   if (!isObject(raw)) {
     return null;
@@ -196,14 +248,35 @@ function normalizeSaveShape(raw: unknown): SaveGameData | null {
     const runState = sanitizeRunState(raw.runState);
     const armyState = sanitizeArmyState(raw.armyState);
     const mapState = sanitizeMapState(raw.mapState);
+    const perkState = sanitizePerkState(raw.perkState);
     if (runState === null || armyState === null || mapState === null) {
       return null;
     }
     return {
       saveVersion: SAVE_VERSION,
       contentVersion: asString(raw.contentVersion, contentManager.getStatus().contentVersion),
-      runState,
+      runState: migrateRunState(runState, mapState),
       armyState,
+      perkState,
+      mapState,
+    };
+  }
+
+  if (asNumber(raw.saveVersion, -1) === 2) {
+    const legacy = raw as unknown as LegacySaveV2;
+    const runState = sanitizeRunState(legacy.runState);
+    const armyState = sanitizeArmyState(legacy.armyState);
+    const mapState = sanitizeMapState(legacy.mapState);
+    if (runState === null || armyState === null || mapState === null) {
+      return null;
+    }
+    console.warn('[Save] Migrated save v2 to v3.');
+    return {
+      saveVersion: SAVE_VERSION,
+      contentVersion: asString(legacy.contentVersion, contentManager.getStatus().contentVersion),
+      runState: migrateRunState(runState, mapState),
+      armyState,
+      perkState: createPerkState(),
       mapState,
     };
   }
@@ -216,12 +289,13 @@ function normalizeSaveShape(raw: unknown): SaveGameData | null {
     if (runState === null || armyState === null || mapState === null) {
       return null;
     }
-    console.warn('[Save] Migrated legacy save v1 to v2.');
+    console.warn('[Save] Migrated legacy save v1 to v3.');
     return {
       saveVersion: SAVE_VERSION,
       contentVersion: contentManager.getStatus().contentVersion,
-      runState,
+      runState: migrateRunState(runState, mapState),
       armyState,
+      perkState: createPerkState(),
       mapState,
     };
   }
@@ -239,6 +313,7 @@ export function saveGame(data: Omit<SaveGameData, 'saveVersion' | 'contentVersio
     contentVersion: contentManager.getStatus().contentVersion,
     runState: data.runState,
     armyState: data.armyState,
+    perkState: data.perkState,
     mapState: data.mapState,
   };
 
@@ -274,3 +349,4 @@ export function clearSave(): void {
 export function hasSave(): boolean {
   return loadGame() !== null;
 }
+

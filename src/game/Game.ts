@@ -1,6 +1,8 @@
 import { Application, Text } from 'pixi.js';
 import { contentManager } from '../content/ContentManager';
 import { createStartingArmy } from '../meta/Army';
+import { DifficultyMode } from '../meta/Difficulty';
+import { createPerkState } from '../meta/Perks';
 import { createScenario } from '../meta/ScenarioFactory';
 import { clearSave, hasSave, loadGame, saveGame } from '../meta/Save';
 import type { BattleResult, BattleScenario } from '../meta/types';
@@ -44,7 +46,7 @@ export class Game {
       setCampaignData: (data) => {
         this.campaignData = data;
       },
-      startNewRun: () => this.startNewRun(),
+      startNewRun: (mode) => this.startNewRun(mode),
       hasSaveData: () => hasSave(),
       loadSaveData: () => this.loadSaveData(),
       saveCampaignData: () => this.saveCampaignData(),
@@ -118,7 +120,7 @@ export class Game {
     this.app.stage.addChild(this.debugPanel.root);
   }
 
-  private startNewRun(): void {
+  private startNewRun(mode: DifficultyMode = DifficultyMode.NORMAL): void {
     const seed = (Date.now() ^ (Math.random() * 0xffffffff)) >>> 0;
     const mapState = generateMap(seed);
 
@@ -128,7 +130,10 @@ export class Game {
       clearedNodeIds: [mapState.startNodeId],
       step: 0,
       difficultyTier: 1,
+      difficultyMode: mode,
       restBonusBattles: 0,
+      battleNodesCleared: 0,
+      lastRewardedNodeId: '',
     };
 
     for (let i = 0; i < mapState.nodes.length; i += 1) {
@@ -139,6 +144,7 @@ export class Game {
     this.campaignData = {
       runState,
       armyState: createStartingArmy(),
+      perkState: createPerkState(),
       mapState,
     };
 
@@ -176,6 +182,7 @@ export class Game {
     this.campaignData = {
       runState,
       armyState: loaded.armyState,
+      perkState: loaded.perkState,
       mapState,
     };
 
@@ -193,6 +200,7 @@ export class Game {
     saveGame({
       runState: this.campaignData.runState,
       armyState: this.campaignData.armyState,
+      perkState: this.campaignData.perkState,
       mapState: this.campaignData.mapState,
     });
   }
@@ -247,7 +255,8 @@ export class Game {
       return;
     }
 
-    this.startNewRun();
+    const mode = this.campaignData?.runState.difficultyMode ?? DifficultyMode.NORMAL;
+    this.startNewRun(mode);
     this.transitionTo('OVERWORLD');
   }
 
