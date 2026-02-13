@@ -18,10 +18,13 @@ export class CapturePoint {
   blueInside = 0;
   redInside = 0;
 
-  constructor(position: Vec2, radius: number) {
+  private captureRateMultiplier: number;
+
+  constructor(position: Vec2, radius: number, captureRateMultiplier = 1) {
     this.position = position;
     this.radius = radius;
     this.radiusSq = radius * radius;
+    this.captureRateMultiplier = captureRateMultiplier;
 
     this.graphics = new Graphics();
     this.draw();
@@ -59,15 +62,21 @@ export class CapturePoint {
 
     const diff = this.blueInside - this.redInside;
     if (diff > 0) {
-      this.progressBlue += diff * CAPTURE_GAIN_RATE * dt;
-      this.progressRed = Math.max(0, this.progressRed - diff * CAPTURE_GAIN_RATE * 0.45 * dt);
+      this.progressBlue += diff * CAPTURE_GAIN_RATE * this.captureRateMultiplier * dt;
+      this.progressRed = Math.max(
+        0,
+        this.progressRed - diff * CAPTURE_GAIN_RATE * 0.45 * this.captureRateMultiplier * dt,
+      );
     } else if (diff < 0) {
       const magnitude = -diff;
-      this.progressRed += magnitude * CAPTURE_GAIN_RATE * dt;
-      this.progressBlue = Math.max(0, this.progressBlue - magnitude * CAPTURE_GAIN_RATE * 0.45 * dt);
+      this.progressRed += magnitude * CAPTURE_GAIN_RATE * this.captureRateMultiplier * dt;
+      this.progressBlue = Math.max(
+        0,
+        this.progressBlue - magnitude * CAPTURE_GAIN_RATE * 0.45 * this.captureRateMultiplier * dt,
+      );
     } else if (this.blueInside > 0 && this.redInside > 0) {
-      this.progressBlue = Math.max(0, this.progressBlue - CONTESTED_DECAY_RATE * dt);
-      this.progressRed = Math.max(0, this.progressRed - CONTESTED_DECAY_RATE * dt);
+      this.progressBlue = Math.max(0, this.progressBlue - CONTESTED_DECAY_RATE * this.captureRateMultiplier * dt);
+      this.progressRed = Math.max(0, this.progressRed - CONTESTED_DECAY_RATE * this.captureRateMultiplier * dt);
     }
 
     this.progressBlue = clamp(this.progressBlue, 0, 100);
@@ -88,6 +97,10 @@ export class CapturePoint {
       return TeamId.Red;
     }
     return null;
+  }
+
+  setCaptureRateMultiplier(value: number): void {
+    this.captureRateMultiplier = Math.max(0.1, value);
   }
 
   private draw(): void {

@@ -24,8 +24,8 @@ export class ObjectiveManager {
     winner: null,
   };
 
-  constructor(position: Vec2, radius: number) {
-    this.capturePoint = new CapturePoint(position, radius);
+  constructor(position: Vec2, radius: number, captureRateMultiplier = 1) {
+    this.capturePoint = new CapturePoint(position, radius, captureRateMultiplier);
   }
 
   reset(): void {

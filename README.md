@@ -65,34 +65,41 @@ REPO_NAME=your-repo-name npm run build
 
 On GitHub Actions, `REPO_NAME` is set automatically from `${{ github.event.repository.name }}`.
 
+## Campaign loop
+
+- `TITLE -> OVERWORLD -> BATTLE -> REWARDS -> OVERWORLD`
+- Start with **New Run** or **Continue** on the title screen.
+- Progress by clicking connected overworld nodes.
+- Battle/Elite/Boss nodes launch tactical battles.
+- Rewards are granted after battle and one bonus choice is required.
+- Save data is persisted in localStorage (`nizam_save_v1`) and used by **Continue**.
+
 ## Controls
 
-- Camera pan: `WASD` or Arrow keys
-- Camera zoom: Mouse wheel
-- Select squad: Left click
-- Multi-select: Drag left mouse selection box
-- Move order: Right click
-- Queue waypoint: `Shift` + Right click
-- Move + set facing: `Alt` + Right click
-- Formation Line: `1`
-- Formation Column: `2`
-- Formation Wedge: `3`
-- Formation Loose: `4`
-- Hold: `H`
-- Charge nearest enemy: `C`
-- Retreat to map edge: `R`
-- Volley (ranged stance): `V`
-- Skirmish (kite while shooting): `K`
-- Restart match: `N`
+- Title: click `New Run`, `Continue`, `Reset Save`
+- Overworld: left click connected nodes to advance, click `Back To Title` to return
+- Battle camera pan: `WASD` or Arrow keys
+- Battle camera zoom: Mouse wheel
+- Battle select squad: Left click
+- Battle multi-select: Drag left mouse selection box
+- Battle move order: Right click
+- Battle queue waypoint: `Shift` + Right click
+- Battle move + set facing: `Alt` + Right click
+- Battle formation line/column/wedge/loose: `1`, `2`, `3`, `4`
+- Battle hold: `H`
+- Battle charge nearest enemy: `C`
+- Battle retreat to map edge: `R`
+- Battle volley (ranged stance): `V`
+- Battle skirmish (kite while shooting): `K`
 
-## Objective and match flow
+## Battle objective
 
 - A single capture point sits at the center of the battlefield.
 - Alive units inside the objective radius generate capture pressure.
 - If one team has more units inside, that team gains capture progress and the other side loses some progress.
 - If both teams are equally present, progress slowly decays toward neutral.
 - First side to reach `100%` capture progress wins the match.
-- End screen appears with winner; press `N` to restart from fresh spawns.
+- Result transitions to rewards, then returns to overworld progression.
 
 ## Ranged combat (Sprint 2)
 
@@ -103,11 +110,24 @@ On GitHub Actions, `REPO_NAME` is set automatically from `${{ github.event.repos
 - Friendly fire is disabled by default.
 - Shielded units take reduced ranged damage from the front arc.
 
+## Overworld node types
+
+- `BATTLE`: standard engagement with moderate enemies
+- `ELITE`: stronger enemy composition and slower objective capture speed
+- `BOSS`: hardest scenario with higher-tier enemy squads
+- `SHOP`: spend gold on squad size or supplies
+- `RECRUIT`: gain recruits and optionally buy a discounted new squad
+- `REST`: gain supplies and a temporary HP bonus for the next battle
+
 ## Gameplay model included
 
-- 2 teams (Blue vs Red), 3 squads each
+- Campaign state machine with title/overworld/battle/rewards
+- Deterministic seeded node-map generation (18-24 nodes, forward edges, guaranteed boss path)
+- Save/load + reset save via localStorage
+- Player army roster with squad tiers, upgrades, and recruiting
+- Node-driven scenario generation (battle/elite/boss scaling)
 - Squad archetypes: Infantry, Spearmen, Cavalry, Archers
-- ~30 soldiers per squad
+- Variable squad sizes driven by campaign roster
 - Formation slots with stable slot assignment
 - Steering with arrive + separation
 - Spatial hash melee checks (not O(n^2))
