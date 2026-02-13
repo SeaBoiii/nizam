@@ -1,7 +1,13 @@
 import { Application, Container, Graphics } from 'pixi.js';
+import { audioManager } from '../audio/AudioManager';
+import type { GameSettings } from '../meta/Settings';
 import { Camera } from './Camera';
 import { formationLabel } from '../sim/Formation';
 import { CombatSystem } from '../sim/CombatSystem';
+import { GameEvents } from '../sim/events/GameEvents';
+import { HitFlashSystem } from '../sim/fx/HitFlashSystem';
+import { RoutBurstSystem } from '../sim/fx/RoutBurstSystem';
+import { TrailSystem } from '../sim/fx/TrailSystem';
 import { Squad, type SquadUpdateContext } from '../sim/Squad';
 import { TeamId, type FormationType, type OrderMode, type WorldBounds } from '../sim/types';
 import { Hud } from '../ui/Hud';
@@ -37,6 +43,7 @@ interface BattleSceneOptions {
   scenario: BattleScenario;
   armyState: ArmyState;
   playerPerkMods: Readonly<CombinedPerkMods>;
+  settings: GameSettings;
   onFinished: (result: BattleResult) => void;
 }
 
@@ -78,6 +85,7 @@ export class BattleScene {
   private readonly objectiveLayer = new Container();
   private readonly objectiveGraphics = new Graphics();
   private readonly waypointLayer = new Graphics();
+  private readonly trailLayer = new Container();
   private readonly unitLayer = new Container();
   private readonly projectileLayer = new Container();
   private readonly overlayLayer = new Container();
@@ -93,6 +101,10 @@ export class BattleScene {
   private readonly rangedSystem = new RangedSystem();
   private readonly unitGrid = new SpatialHash(32);
   private readonly aiDirector = new AIDirector();
+  private readonly gameEvents = new GameEvents();
+  private readonly trailSystem: TrailSystem;
+  private readonly hitFlashSystem: HitFlashSystem;
+  private readonly routBurstSystem: RoutBurstSystem;
 
   private readonly objectiveManager: ObjectiveManager;
   private readonly projectileSystem: ProjectileSystem;
@@ -103,6 +115,7 @@ export class BattleScene {
   private readonly keys = new Set<string>();
   private readonly aliveSoldiers: Soldier[] = [];
   private readonly minimapMarkers: ObjectiveMinimapMarker[] = [];
+  private readonly orderEmitIds: number[] = [];
 
   private readonly pointerScreen = new Vec2();
   private readonly pointerWorld = new Vec2();
@@ -122,6 +135,10 @@ export class BattleScene {
   private lastOrderMode = 'IDLE';
   private finished = false;
   private nextSquadId = 1;
+  private paused = false;
+  private cameraSpeed = 1;
+  private showMinimap = true;
+  private reduceScreenShake = false;
 
   private playerInitial = 0;
   private enemyInitial = 0;
@@ -142,6 +159,7 @@ export class BattleScene {
     this.worldLayer.addChild(this.mapLayer);
     this.worldLayer.addChild(this.objectiveLayer);
     this.worldLayer.addChild(this.waypointLayer);
+    this.worldLayer.addChild(this.trailLayer);
     this.worldLayer.addChild(this.unitLayer);
     this.worldLayer.addChild(this.projectileLayer);
     this.worldLayer.addChild(this.overlayLayer);
@@ -157,6 +175,10 @@ export class BattleScene {
     this.selectionBox = new SelectionBox(this.uiLayer);
     this.squadIndicators = new SquadIndicators(this.overlayLayer);
     this.projectileSystem = new ProjectileSystem(this.projectileLayer);
+    this.trailSystem = new TrailSystem(this.trailLayer);
+    this.hitFlashSystem = new HitFlashSystem(this.overlayLayer);
+    this.routBurstSystem = new RoutBurstSystem(this.overlayLayer);
+    this.bindEventChannels();
 
     this.drawMap();
 
@@ -183,6 +205,7 @@ export class BattleScene {
     this.camera.applyTo(this.worldLayer);
     this.minimap.resize(this.app.screen.width, this.app.screen.height);
     this.aiDirector.setOrderFrequencyMultiplier(this.scenario.enemyAIFrequencyMult);
+    this.applySettings(options.settings);
 
     this.spawnTeams();
     this.objectiveManager.onStart(this.objectiveWorld);
@@ -203,11 +226,19 @@ export class BattleScene {
     this.aliveSoldiers.length = 0;
 
     this.projectileSystem.clear();
+    this.trailSystem.clear();
+    this.hitFlashSystem.clear();
+    this.routBurstSystem.clear();
     this.root.destroy({ children: true });
   }
 
   update(frameDt: number): void {
     if (this.finished || this.root.destroyed) {
+      return;
+    }
+
+    if (this.paused || frameDt <= 0) {
+      this.renderFrame();
       return;
     }
 
@@ -351,6 +382,7 @@ export class BattleScene {
       overlayLayer: this.overlayLayer,
       commandable,
       perkMods,
+      events: this.gameEvents,
     });
     this.nextSquadId += 1;
     this.squads.push(squad);
@@ -457,6 +489,9 @@ export class BattleScene {
   };
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (this.paused) {
+      return;
+    }
     this.keys.add(event.code);
 
     if (event.repeat) {
@@ -501,6 +536,9 @@ export class BattleScene {
   };
 
   private readonly onMouseDown = (event: MouseEvent): void => {
+    if (this.paused) {
+      return;
+    }
     if (event.button !== 0) {
       return;
     }
@@ -514,6 +552,9 @@ export class BattleScene {
   };
 
   private readonly onMouseMove = (event: MouseEvent): void => {
+    if (this.paused) {
+      return;
+    }
     this.toCanvasPoint(event.clientX, event.clientY, this.pointerScreen);
 
     if (!this.leftMouseDown) {
@@ -533,6 +574,9 @@ export class BattleScene {
   };
 
   private readonly onMouseUp = (event: MouseEvent): void => {
+    if (this.paused) {
+      return;
+    }
     if (event.button !== 0 || !this.leftMouseDown) {
       return;
     }
@@ -552,6 +596,9 @@ export class BattleScene {
   };
 
   private readonly onWheel = (event: WheelEvent): void => {
+    if (this.paused) {
+      return;
+    }
     event.preventDefault();
     this.toCanvasPoint(event.clientX, event.clientY, this.pointerScreen);
 
@@ -562,6 +609,9 @@ export class BattleScene {
 
   private readonly onContextMenu = (event: MouseEvent): void => {
     event.preventDefault();
+    if (this.paused) {
+      return;
+    }
     if (this.selectedSquads.size === 0) {
       return;
     }
@@ -583,6 +633,7 @@ export class BattleScene {
       }
       squad.issueMove(this.pointerWorld, queue, facingOverride);
     }
+    this.emitOrderIssued('move');
 
     if (setFacing) {
       this.lastOrderMode = queue ? 'QUEUE MOVE+FACE' : 'MOVE+FACE';
@@ -599,6 +650,7 @@ export class BattleScene {
     for (const squad of this.selectedSquads) {
       squad.setFormation(formation);
     }
+    this.emitOrderIssued('hold');
 
     this.lastOrderMode = `FORMATION ${formationLabel(formation).toUpperCase()}`;
   }
@@ -611,6 +663,7 @@ export class BattleScene {
     for (const squad of this.selectedSquads) {
       squad.holdPosition();
     }
+    this.emitOrderIssued('hold');
 
     this.lastOrderMode = 'HOLD';
   }
@@ -623,6 +676,7 @@ export class BattleScene {
     for (const squad of this.selectedSquads) {
       squad.orderCharge();
     }
+    this.emitOrderIssued('charge');
 
     this.lastOrderMode = 'CHARGE';
   }
@@ -635,6 +689,7 @@ export class BattleScene {
     for (const squad of this.selectedSquads) {
       squad.orderRetreat(this.worldBounds);
     }
+    this.emitOrderIssued('retreat');
 
     this.lastOrderMode = 'RETREAT';
   }
@@ -647,6 +702,7 @@ export class BattleScene {
     for (const squad of this.selectedSquads) {
       squad.orderVolley();
     }
+    this.emitOrderIssued('volley');
 
     this.lastOrderMode = 'VOLLEY';
   }
@@ -659,6 +715,7 @@ export class BattleScene {
     for (const squad of this.selectedSquads) {
       squad.orderSkirmish();
     }
+    this.emitOrderIssued('skirmish');
 
     this.lastOrderMode = 'SKIRMISH';
   }
@@ -736,6 +793,7 @@ export class BattleScene {
   }
 
   private fixedUpdate(dt: number): void {
+    this.gameEvents.beginTick();
     this.simTime += dt;
     this.updateCameraPan(dt);
     this.objectiveWorld.simTime = this.simTime;
@@ -753,9 +811,9 @@ export class BattleScene {
     this.collectAliveSoldiers();
     this.rebuildUnitGrid();
 
-    this.rangedSystem.update(dt, this.squads, this.aliveSoldiers, this.unitGrid, this.projectileSystem);
-    this.combat.update(dt, this.aliveSoldiers, this.unitGrid);
-    this.projectileSystem.update(dt, this.aliveSoldiers, this.unitGrid);
+    this.rangedSystem.update(dt, this.squads, this.aliveSoldiers, this.unitGrid, this.projectileSystem, this.gameEvents);
+    this.combat.update(dt, this.aliveSoldiers, this.unitGrid, this.gameEvents);
+    this.projectileSystem.update(dt, this.aliveSoldiers, this.unitGrid, this.gameEvents);
 
     this.collectAliveSoldiers();
     this.objectiveManager.update(dt, this.objectiveWorld);
@@ -779,15 +837,22 @@ export class BattleScene {
     if (objectiveType === 'HOLDOUT' || objectiveType === 'ESCORT') {
       if (playerRemaining <= 0) {
         this.finishBattle(false);
+        return;
       }
-      return;
+    } else {
+      if (enemyRemaining <= 0) {
+        this.finishBattle(true);
+        return;
+      } else if (playerRemaining <= 0) {
+        this.finishBattle(false);
+        return;
+      }
     }
 
-    if (enemyRemaining <= 0) {
-      this.finishBattle(true);
-    } else if (playerRemaining <= 0) {
-      this.finishBattle(false);
-    }
+    this.gameEvents.dispatch();
+    this.trailSystem.update(dt, this.aliveSoldiers);
+    this.hitFlashSystem.update(dt);
+    this.routBurstSystem.update(dt);
   }
 
   private finishBattle(playerWon: boolean): void {
@@ -796,6 +861,8 @@ export class BattleScene {
     }
 
     this.finished = true;
+    this.gameEvents.emitBattleEnd(playerWon ? TeamId.Blue : TeamId.Red);
+    this.gameEvents.dispatch();
 
     const playerRemaining = this.countTeamAlive(TeamId.Blue);
     const enemyRemaining = this.countTeamAlive(TeamId.Red);
@@ -869,7 +936,7 @@ export class BattleScene {
     const axisLen = Math.hypot(axisX, axisY);
     const dirX = axisX / axisLen;
     const dirY = axisY / axisLen;
-    const speed = 780 / this.camera.zoom;
+    const speed = (780 * this.cameraSpeed) / this.camera.zoom;
 
     this.camera.pan(dirX * speed * dt, dirY * speed * dt);
   }
@@ -891,7 +958,9 @@ export class BattleScene {
     this.objectiveHud.update(this.objectiveManager.getHUDState());
 
     this.objectiveManager.getMinimapMarkers(this.minimapMarkers);
-    this.minimap.update(this.squads, this.aliveSoldiers, this.minimapMarkers);
+    if (this.showMinimap) {
+      this.minimap.update(this.squads, this.aliveSoldiers, this.minimapMarkers);
+    }
   }
 
   private drawWaypointPaths(): void {
@@ -983,10 +1052,66 @@ export class BattleScene {
     return current === null ? this.lastOrderMode : orderLabel(current);
   }
 
+  setPaused(paused: boolean): void {
+    this.paused = paused;
+    if (paused) {
+      this.keys.clear();
+      this.leftMouseDown = false;
+      this.dragSelecting = false;
+      this.selectionBox.hide();
+    }
+  }
+
+  applySettings(settings: GameSettings): void {
+    this.cameraSpeed = settings.cameraSpeed;
+    this.showMinimap = settings.showMinimap;
+    this.reduceScreenShake = settings.reduceScreenShake;
+    this.minimap.setVisible(this.showMinimap);
+    this.trailSystem.setEnabled(settings.showTrails);
+  }
+
+  private bindEventChannels(): void {
+    this.gameEvents.onOrderIssued((event) => {
+      if (event.teamId === TeamId.Blue && event.orderType === 'charge') {
+        audioManager.play('horn_charge', 1, 220);
+      }
+    });
+    this.gameEvents.onProjectileFired(() => {
+      audioManager.play('arrow_shoot', 0.55, 180);
+    });
+    this.gameEvents.onDamage((event) => {
+      this.hitFlashSystem.spawn(event.x, event.y, event.amount);
+      audioManager.play('hit_impact', 0.7, 70);
+    });
+    this.gameEvents.onSquadRouted((event) => {
+      this.routBurstSystem.spawn(
+        event.x,
+        event.y,
+        event.teamId === TeamId.Blue ? 0x7fc9ff : 0xffa4a4,
+        this.reduceScreenShake ? 0.65 : 1,
+      );
+      audioManager.play('morale_break', 0.9, 250);
+    });
+    this.gameEvents.onBattleEnd((event) => {
+      audioManager.play(event.winnerTeamId === TeamId.Blue ? 'victory' : 'defeat', 1, 0);
+    });
+  }
+
   private toCanvasPoint(clientX: number, clientY: number, out: Vec2): Vec2 {
     const rect = this.app.canvas.getBoundingClientRect();
     out.x = clientX - rect.left;
     out.y = clientY - rect.top;
     return out;
+  }
+
+  private emitOrderIssued(orderType: OrderMode): void {
+    this.orderEmitIds.length = 0;
+    for (const squad of this.selectedSquads) {
+      this.orderEmitIds.push(squad.id);
+    }
+    if (this.orderEmitIds.length === 0) {
+      return;
+    }
+    this.gameEvents.emitOrderIssued(TeamId.Blue, orderType, this.orderEmitIds);
   }
 }

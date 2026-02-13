@@ -28,6 +28,10 @@ export class Minimap {
     uiLayer.addChild(this.root);
   }
 
+  setVisible(visible: boolean): void {
+    this.root.visible = visible;
+  }
+
   resize(screenWidth: number, screenHeight: number): void {
     this.root.position.set(screenWidth - this.width - MINIMAP_MARGIN, screenHeight - this.height - MINIMAP_MARGIN);
   }

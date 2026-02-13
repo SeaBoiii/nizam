@@ -1,5 +1,6 @@
 import { ARCHER_BASE_SPREAD_RADIANS, ARCHER_MAX_LEAD_TIME, ARCHER_MOVING_SPREAD_MULTIPLIER, ARCHER_MOVING_SPEED_THRESHOLD } from '../rules/Constants';
 import { clamp } from '../../utils/math';
+import type { GameEvents } from '../events/GameEvents';
 import type { Soldier } from '../Soldier';
 import type { Squad } from '../Squad';
 import { canSquadFireRanged } from '../orders/RangedOrders';
@@ -16,6 +17,7 @@ export class RangedSystem {
     aliveUnits: readonly Soldier[],
     spatialGrid: SpatialHash,
     projectileSystem: ProjectileSystem,
+    events: GameEvents,
   ): void {
     for (let squadIndex = 0; squadIndex < squads.length; squadIndex += 1) {
       const squad = squads[squadIndex];
@@ -106,6 +108,7 @@ export class RangedSystem {
           shooterSquadId: unit.squad.id,
           gravity: unit.baseStats.projectileGravity,
         });
+        events.emitProjectileFired(unit.team, unit.position.x, unit.position.y);
 
         const cooldownFromRate = 1 / Math.max(0.2, unit.baseStats.attackRate);
         unit.rangedCooldown = unit.baseStats.rangedCooldown > 0 ? unit.baseStats.rangedCooldown : cooldownFromRate;

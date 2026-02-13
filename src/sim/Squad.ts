@@ -1,6 +1,7 @@
 import { Container, Graphics, Text } from 'pixi.js';
 import { clamp, damp, rotateTowardAngle, shortestAngleDelta } from '../utils/math';
 import { Vec2 } from '../utils/vec2';
+import type { GameEvents } from './events/GameEvents';
 import { computeSlotLocal, estimateFormationRadius } from './Formation';
 import { skirmishThreatRange } from './orders/RangedOrders';
 import { DEFAULT_PERK_MODS, type CombinedPerkMods } from './rules/PerkMods';
@@ -34,6 +35,7 @@ interface SquadOptions {
   overlayLayer: Container;
   commandable?: boolean;
   perkMods?: Readonly<CombinedPerkMods>;
+  events?: GameEvents;
 }
 
 export interface SquadUpdateContext {
@@ -53,6 +55,7 @@ export class Squad {
   readonly initialSize: number;
   readonly commandable: boolean;
   readonly perkMods: Readonly<CombinedPerkMods>;
+  readonly events: GameEvents | null;
   readonly anchor: Vec2;
   readonly anchorVelocity = new Vec2();
   readonly holdAnchor = new Vec2();
@@ -87,6 +90,7 @@ export class Squad {
     this.initialSize = options.soldierCount;
     this.commandable = options.commandable ?? true;
     this.perkMods = options.perkMods ?? DEFAULT_PERK_MODS;
+    this.events = options.events ?? null;
 
     this.selectionOutline = new Graphics();
     this.selectionOutline.visible = false;
@@ -740,6 +744,9 @@ export class Squad {
     });
     this.reachedMapEdge = false;
     this.chargeTarget = null;
+    if (this.events !== null) {
+      this.events.emitSquadRouted(this.team, this.id, this.anchor.x, this.anchor.y);
+    }
   }
 
   private computeRetreatPoint(world: WorldBounds): Vec2 {

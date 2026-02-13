@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from 'pixi.js';
+import type { GameSettings } from '../../meta/Settings';
 import type { IGameState } from './IGameState';
 import type { StateContext } from './StateContext';
 import type { MapState, Node, NodeType } from '../../overworld/types';
@@ -110,6 +111,7 @@ export class OverworldState implements IGameState {
   private readonly panelButtons: TextButton[] = [];
 
   private hoveredNodeId: string | null = null;
+  private paused = false;
 
   constructor(private readonly context: StateContext) {
     this.root.addChild(this.bg);
@@ -170,6 +172,12 @@ export class OverworldState implements IGameState {
     this.drawMap(campaign.mapState);
   }
 
+  setPaused(paused: boolean): void {
+    this.paused = paused;
+  }
+
+  applySettings(_settings: GameSettings): void {}
+
   private bindInput(): void {
     const canvas = this.context.app.canvas;
     window.addEventListener('mousemove', this.onMouseMove);
@@ -189,6 +197,9 @@ export class OverworldState implements IGameState {
   };
 
   private readonly onMouseMove = (event: MouseEvent): void => {
+    if (this.paused) {
+      return;
+    }
     const campaign = this.context.getCampaignData();
     if (campaign === null) {
       return;
@@ -200,6 +211,9 @@ export class OverworldState implements IGameState {
   };
 
   private readonly onMouseDown = (event: MouseEvent): void => {
+    if (this.paused) {
+      return;
+    }
     if (event.button !== 0 || this.panel.visible) {
       return;
     }

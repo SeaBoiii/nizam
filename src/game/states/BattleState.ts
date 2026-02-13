@@ -1,6 +1,7 @@
 import { Container } from 'pixi.js';
 import { BattleScene } from '../BattleScene';
 import { getCombinedPerkMods } from '../../meta/Perks';
+import { getDefaultSettings, type GameSettings } from '../../meta/Settings';
 import type { IGameState } from './IGameState';
 import type { StateContext } from './StateContext';
 import type { BattleScenario } from '../../meta/types';
@@ -8,6 +9,7 @@ import type { BattleScenario } from '../../meta/types';
 export class BattleState implements IGameState {
   private readonly root = new Container();
   private battleScene: BattleScene | null = null;
+  private currentSettings: GameSettings = getDefaultSettings();
 
   constructor(private readonly context: StateContext) {}
 
@@ -33,6 +35,7 @@ export class BattleState implements IGameState {
       scenario,
       armyState: campaign.armyState,
       playerPerkMods: getCombinedPerkMods(campaign.perkState.pickedPerkIds),
+      settings: this.currentSettings,
       onFinished: (result) => {
         this.context.setLastBattleResult(result);
         this.context.transitionTo('REWARDS', result);
@@ -53,6 +56,19 @@ export class BattleState implements IGameState {
   update(dt: number): void {
     if (this.battleScene !== null) {
       this.battleScene.update(dt);
+    }
+  }
+
+  setPaused(paused: boolean): void {
+    if (this.battleScene !== null) {
+      this.battleScene.setPaused(paused);
+    }
+  }
+
+  applySettings(settings: GameSettings): void {
+    this.currentSettings = settings;
+    if (this.battleScene !== null) {
+      this.battleScene.applySettings(settings);
     }
   }
 

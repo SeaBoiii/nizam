@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from 'pixi.js';
+import { audioManager } from '../../audio/AudioManager';
 import type { PerkContent } from '../../content/ContentTypes';
 
 interface PerkCard {
@@ -116,6 +117,7 @@ export class PerkChoice extends Container {
       bg.tint = 0xffffff;
     });
     root.on('pointertap', () => {
+      audioManager.play('ui_click', 1, 35);
       if (this.onPick !== null) {
         this.onPick(perk.id);
       }
@@ -181,4 +183,3 @@ export class PerkChoice extends Container {
     }
   }
 }
-

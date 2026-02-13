@@ -1,4 +1,5 @@
 import { Graphics, type Container } from 'pixi.js';
+import type { GameEvents } from '../events/GameEvents';
 import type { Soldier } from '../Soldier';
 import { SOLDIER_RADIUS } from '../Soldier';
 import { TeamId } from '../types';
@@ -55,7 +56,7 @@ export class ProjectileSystem {
     this.projectiles.push(projectile);
   }
 
-  update(dt: number, units: readonly Soldier[], spatialGrid: SpatialHash): void {
+  update(dt: number, units: readonly Soldier[], spatialGrid: SpatialHash, events: GameEvents): void {
     for (let i = this.projectiles.length - 1; i >= 0; i -= 1) {
       const projectile = this.projectiles[i];
       if (!projectile.alive) {
@@ -91,6 +92,7 @@ export class ProjectileSystem {
 
         const damage = computeRangedDamage(projectile, unit, projectile.damage);
         unit.applyDamage(damage);
+        events.emitDamage(projectile.teamId, unit.team, unit.position.x, unit.position.y, damage);
 
         projectile.alive = false;
         this.recycleAt(i);

@@ -39,6 +39,7 @@ export class CapturePointObjective implements IObjective {
     progressRed: 0,
   };
   private readonly tacticalState: ObjectiveTacticalState;
+  private pulseTime = 0;
 
   constructor(
     id: string,
@@ -82,6 +83,7 @@ export class CapturePointObjective implements IObjective {
   }
 
   update(dt: number, world: ObjectiveWorld): void {
+    this.pulseTime += dt;
     this.blueInside = 0;
     this.redInside = 0;
 
@@ -177,6 +179,10 @@ export class CapturePointObjective implements IObjective {
     gfx.circle(this.position.x, this.position.y, this.radius);
     gfx.fill({ color: 0x6a5b3a, alpha: 0.12 });
     gfx.stroke({ color: 0xd7b06d, alpha: 0.9, width: 2 });
+
+    const pulse = this.radius + 10 + Math.sin(this.pulseTime * 2.8) * 8;
+    gfx.circle(this.position.x, this.position.y, pulse);
+    gfx.stroke({ color: 0xe8c785, alpha: 0.32, width: 1.4 });
 
     const blueArc = (Math.PI * 2 * this.progressBlue) / 100;
     if (blueArc > 0.001) {

@@ -7,6 +7,12 @@ interface TextButtonOptions {
   onClick: () => void;
 }
 
+let globalClickListener: (() => void) | null = null;
+
+export function setTextButtonClickListener(listener: (() => void) | null): void {
+  globalClickListener = listener;
+}
+
 export class TextButton extends Container {
   private readonly bg = new Graphics();
   private readonly text: Text;
@@ -41,6 +47,9 @@ export class TextButton extends Container {
     this.on('pointertap', () => {
       if (this.enabled) {
         options.onClick();
+        if (globalClickListener !== null) {
+          globalClickListener();
+        }
       }
     });
 

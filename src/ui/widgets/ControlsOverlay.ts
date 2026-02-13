@@ -1,0 +1,107 @@
+import { Container, Graphics, Text } from 'pixi.js';
+
+const MAX_SCROLL = 520;
+
+export class ControlsOverlay {
+  readonly root = new Container();
+
+  private readonly panel = new Graphics();
+  private readonly maskGraphics = new Graphics();
+  private readonly content = new Container();
+  private readonly text = new Text({
+    text: '',
+    style: {
+      fill: 0xdce9fa,
+      fontFamily: 'monospace',
+      fontSize: 14,
+      lineHeight: 20,
+    },
+  });
+
+  private width = 640;
+  private height = 460;
+  private scroll = 0;
+
+  constructor() {
+    this.root.visible = false;
+    this.root.addChild(this.panel);
+    this.root.addChild(this.content);
+    this.root.addChild(this.maskGraphics);
+    this.content.addChild(this.text);
+    this.content.mask = this.maskGraphics;
+
+    this.text.text = [
+      'Controls',
+      '',
+      'Campaign',
+      '- Left click node: Advance',
+      '- ESC: Pause menu',
+      '',
+      'Battle Camera',
+      '- WASD / Arrow Keys: Pan',
+      '- Mouse Wheel: Zoom',
+      '',
+      'Battle Command',
+      '- Left click: Select squad',
+      '- Drag left mouse: Box select',
+      '- Right click: Move order',
+      '- Shift + Right click: Queue waypoint',
+      '- Alt + Right click: Move + facing',
+      '',
+      'Formations',
+      '- 1 Line, 2 Column, 3 Wedge, 4 Loose',
+      '',
+      'Orders',
+      '- H Hold',
+      '- C Charge',
+      '- R Retreat',
+      '- V Volley',
+      '- K Skirmish',
+      '',
+      'Meta',
+      '- F1 or `: Debug panel',
+      '- ESC: Pause / Resume',
+    ].join('\n');
+  }
+
+  show(): void {
+    this.root.visible = true;
+  }
+
+  hide(): void {
+    this.root.visible = false;
+  }
+
+  isVisible(): boolean {
+    return this.root.visible;
+  }
+
+  scrollBy(deltaY: number): void {
+    this.scroll = Math.max(0, Math.min(MAX_SCROLL, this.scroll + deltaY));
+    this.content.position.y = this.topY() - this.scroll;
+  }
+
+  layout(screenWidth: number, screenHeight: number): void {
+    this.width = Math.min(760, Math.max(400, screenWidth * 0.72));
+    this.height = Math.min(520, Math.max(320, screenHeight * 0.74));
+    const x = screenWidth * 0.5 - this.width * 0.5;
+    const y = screenHeight * 0.5 - this.height * 0.5;
+
+    this.panel.clear();
+    this.panel.roundRect(x, y, this.width, this.height, 10);
+    this.panel.fill({ color: 0x131d2b, alpha: 0.97 });
+    this.panel.stroke({ color: 0x789ec6, alpha: 0.92, width: 1.6 });
+
+    this.maskGraphics.clear();
+    this.maskGraphics.rect(x + 16, y + 18, this.width - 32, this.height - 36);
+    this.maskGraphics.fill({ color: 0xffffff, alpha: 1 });
+
+    this.text.position.set(x + 24, y + 22);
+    this.content.position.set(0, -this.scroll);
+  }
+
+  private topY(): number {
+    return 0;
+  }
+}
+

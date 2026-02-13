@@ -40,6 +40,7 @@ export class Soldier {
 
   attackCooldown = 0;
   rangedCooldown = 0;
+  trailCooldown = 0;
   chargeState: ChargeState = 'none';
   chargeCooldown = 0;
   chargeReady = true;

@@ -115,6 +115,7 @@ If a content file is missing or invalid, the game falls back to built-in default
 - Battle skirmish (kite while shooting): `K`
 - Rewards: when a perk offer appears, click one perk card to continue
 - Debug panel toggle (all states): `F1` or `` ` ``
+- Pause menu (Battle + Overworld): `ESC`
 
 ## Perks + Difficulty (Sprint 6)
 
@@ -131,6 +132,23 @@ If a content file is missing or invalid, the game falls back to built-in default
   - post-battle field medic recruit recovery
 - New Run supports `Normal` and `Hard` modes.
 - Hard mode scales enemies faster by node depth (tier, size, AI order cadence) and grants slightly higher rewards.
+
+## Pause + Settings + Audio (Sprint 7)
+
+- Press `ESC` in Overworld or Battle to open pause menu.
+- Pause menu options:
+  - Resume
+  - Settings
+  - Controls
+  - Quit To Title (with confirmation)
+- Settings are saved to localStorage key `nizam_settings_v1`:
+  - `masterVolume`, `sfxVolume`, `musicVolume`
+  - `cameraSpeed`
+  - `showMinimap`
+  - `showTrails`
+  - `reduceScreenShake`
+- Browser audio is unlocked on first user interaction (click/tap). Some browsers block sound until then.
+- Gameplay SFX cues are throttled to avoid spam (arrows, impacts, rout, etc.).
 
 ## Battle objectives (Sprint 4)
 

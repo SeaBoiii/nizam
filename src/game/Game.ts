@@ -1,14 +1,18 @@
 import { Application, Text } from 'pixi.js';
+import { audioManager } from '../audio/AudioManager';
 import { contentManager } from '../content/ContentManager';
 import { createStartingArmy } from '../meta/Army';
 import { DifficultyMode } from '../meta/Difficulty';
 import { createPerkState } from '../meta/Perks';
+import { loadSettings, saveSettings, type GameSettings } from '../meta/Settings';
 import { createScenario } from '../meta/ScenarioFactory';
 import { clearSave, hasSave, loadGame, saveGame } from '../meta/Save';
 import type { BattleResult, BattleScenario } from '../meta/types';
 import { generateMap } from '../overworld/generateMap';
 import type { RunState } from '../overworld/types';
 import { DebugPanel } from '../ui/widgets/DebugPanel';
+import { PauseMenu } from '../ui/widgets/PauseMenu';
+import { setTextButtonClickListener } from '../ui/widgets/TextButton';
 import type { IGameState } from './states/IGameState';
 import { BattleState } from './states/BattleState';
 import { OverworldState } from './states/OverworldState';
@@ -24,7 +28,11 @@ export class Game {
   private campaignData: CampaignData | null = null;
   private pendingScenario: BattleScenario | null = null;
   private lastBattleResult: BattleResult | null = null;
+  private settings: GameSettings = loadSettings();
+  private paused = false;
+
   private readonly debugPanel: DebugPanel;
+  private readonly pauseMenu: PauseMenu;
   private readonly contentWarningText = new Text({
     text: '',
     style: {
@@ -64,6 +72,8 @@ export class Game {
 
     window.addEventListener('beforeunload', this.onBeforeUnload);
     window.addEventListener('keydown', this.onGlobalKeyDown);
+    window.addEventListener('pointerdown', this.onGlobalPointerDown);
+    window.addEventListener('wheel', this.onGlobalWheel, { passive: true });
 
     this.contentWarningText.position.set(12, 12);
     this.app.stage.addChild(this.contentWarningText);
@@ -73,7 +83,23 @@ export class Game {
       onReloadContent: () => this.reloadContent(),
       onRestartAction: () => this.handleDebugRestartAction(),
     });
+    this.pauseMenu = new PauseMenu({
+      parent: this.app.stage,
+      getSettings: () => this.settings,
+      onSettingsChanged: (settings) => this.applySettings(settings, true),
+      onResume: () => this.setPaused(false),
+      onQuitToTitle: () => {
+        this.setPaused(false);
+        this.transitionTo('TITLE');
+      },
+    });
 
+    setTextButtonClickListener(() => {
+      audioManager.unlock();
+      audioManager.play('ui_click', 1, 35);
+    });
+
+    this.applySettings(this.settings, false);
     this.transitionTo('TITLE');
     this.app.ticker.add(this.tick);
     this.refreshContentWarning();
@@ -85,11 +111,14 @@ export class Game {
     }
 
     const frameDt = this.app.ticker.deltaMS / 1000;
-    this.currentState.update(frameDt);
+    this.currentState.update(this.paused ? 0 : frameDt);
     this.updateDebugPanel();
+    this.pauseMenu.layout(this.app.screen.width, this.app.screen.height);
   };
 
   private transitionTo(stateId: GameStateId, payload?: unknown): void {
+    this.setPaused(false);
+
     if (this.currentState !== null) {
       if (this.currentStateId === 'OVERWORLD' || this.currentStateId === 'REWARDS') {
         this.saveCampaignData();
@@ -116,8 +145,12 @@ export class Game {
     }
 
     this.currentState.onEnter(payload);
+    if (this.currentState.applySettings) {
+      this.currentState.applySettings(this.settings);
+    }
     this.app.stage.addChild(this.contentWarningText);
     this.app.stage.addChild(this.debugPanel.root);
+    this.app.stage.addChild(this.pauseMenu.root);
   }
 
   private startNewRun(mode: DifficultyMode = DifficultyMode.NORMAL): void {
@@ -211,13 +244,31 @@ export class Game {
 
   private readonly onBeforeUnload = (): void => {
     this.saveCampaignData();
+    saveSettings(this.settings);
   };
 
   private readonly onGlobalKeyDown = (event: KeyboardEvent): void => {
     if (event.code === 'F1' || event.code === 'Backquote') {
       event.preventDefault();
       this.debugPanel.toggleVisible();
+      return;
     }
+
+    if (event.code === 'Escape' && (this.currentStateId === 'BATTLE' || this.currentStateId === 'OVERWORLD')) {
+      event.preventDefault();
+      this.setPaused(!this.paused);
+    }
+  };
+
+  private readonly onGlobalPointerDown = (): void => {
+    audioManager.unlock();
+  };
+
+  private readonly onGlobalWheel = (event: WheelEvent): void => {
+    if (!this.paused) {
+      return;
+    }
+    this.pauseMenu.onWheel(event.deltaY);
   };
 
   private updateDebugPanel(): void {
@@ -250,6 +301,7 @@ export class Game {
   }
 
   private handleDebugRestartAction(): void {
+    this.setPaused(false);
     if (this.currentStateId === 'BATTLE') {
       this.restartCurrentBattle();
       return;
@@ -297,4 +349,32 @@ export class Game {
     this.pendingScenario = rebuilt;
     this.transitionTo('BATTLE', { scenario: rebuilt });
   }
+
+  private applySettings(settings: GameSettings, persist: boolean): void {
+    this.settings = settings;
+    audioManager.setMasterVolume(settings.masterVolume);
+    audioManager.setSfxVolume(settings.sfxVolume);
+    audioManager.setMusicVolume(settings.musicVolume);
+
+    if (this.currentState && this.currentState.applySettings) {
+      this.currentState.applySettings(settings);
+    }
+    if (persist) {
+      saveSettings(this.settings);
+    }
+  }
+
+  private setPaused(paused: boolean): void {
+    if (this.currentStateId !== 'BATTLE' && this.currentStateId !== 'OVERWORLD') {
+      this.paused = false;
+      this.pauseMenu.setVisible(false);
+      return;
+    }
+    this.paused = paused;
+    this.pauseMenu.setVisible(paused);
+    if (this.currentState && this.currentState.setPaused) {
+      this.currentState.setPaused(paused);
+    }
+  }
 }
+

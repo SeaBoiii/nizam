@@ -1,4 +1,5 @@
 import { computeChargeBurstDamage, applyChargeKnockback, consumeCharge, updateChargeState } from './combat/Charge';
+import type { GameEvents } from './events/GameEvents';
 import type { Soldier } from './Soldier';
 import type { SpatialHash } from './SpatialHash';
 import { applyChargeCounter } from './rules/Counters';
@@ -7,7 +8,7 @@ import { computeDamage } from './rules/Damage';
 export class CombatSystem {
   private readonly neighbors: Soldier[] = [];
 
-  update(dt: number, aliveUnits: readonly Soldier[], spatialGrid: SpatialHash): void {
+  update(dt: number, aliveUnits: readonly Soldier[], spatialGrid: SpatialHash, events: GameEvents): void {
     for (let i = 0; i < aliveUnits.length; i += 1) {
       const soldier = aliveUnits[i];
       if (!soldier.alive) {
@@ -43,6 +44,7 @@ export class CombatSystem {
         burst = computeDamage(attacker, target, burst);
 
         target.applyDamage(burst);
+        events.emitDamage(attacker.team, target.team, target.position.x, target.position.y, burst);
         applyChargeKnockback(attacker, target);
         consumeCharge(attacker);
         burstResolved = true;
@@ -55,6 +57,7 @@ export class CombatSystem {
       const baseDamage = attacker.baseStats.attackDamage;
       const finalDamage = computeDamage(attacker, target, baseDamage);
       target.applyDamage(finalDamage);
+      events.emitDamage(attacker.team, target.team, target.position.x, target.position.y, finalDamage);
 
       const attackRate = Math.max(0.2, attacker.baseStats.attackRate);
       attacker.attackCooldown = 1 / attackRate;
