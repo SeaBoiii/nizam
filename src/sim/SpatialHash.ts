@@ -25,7 +25,8 @@ export class SpatialHash {
     bucket.push(soldier);
   }
 
-  forEachNearby(x: number, y: number, callback: (soldier: Soldier) => void): void {
+  queryNearby(x: number, y: number, out: Soldier[]): Soldier[] {
+    out.length = 0;
     const centerX = Math.floor(x / this.cellSize);
     const centerY = Math.floor(y / this.cellSize);
 
@@ -37,10 +38,12 @@ export class SpatialHash {
         }
 
         for (let i = 0; i < bucket.length; i += 1) {
-          callback(bucket[i]);
+          out.push(bucket[i]);
         }
       }
     }
+
+    return out;
   }
 
   private key(ix: number, iy: number): number {

@@ -1,9 +1,12 @@
 import { Graphics } from 'pixi.js';
 import { Vec2 } from '../utils/vec2';
+import type { UnitArchetype, UnitStats, UnitTag } from './types/UnitArchetype';
 import type { Squad } from './Squad';
 import type { TeamId } from './types';
 
 export const SOLDIER_RADIUS = 4;
+
+export type ChargeState = 'none' | 'charging' | 'cooldown';
 
 interface SoldierOptions {
   id: number;
@@ -12,6 +15,7 @@ interface SoldierOptions {
   slotIndex: number;
   color: number;
   initialPosition: Vec2;
+  archetype: UnitArchetype;
 }
 
 export class Soldier {
@@ -24,8 +28,20 @@ export class Soldier {
   readonly sprite: Graphics;
   readonly jitterPhase: number;
 
-  hp = 100;
+  readonly archetypeId: string;
+  readonly tags: Set<UnitTag>;
+  readonly baseStats: UnitStats;
+  readonly hpMax: number;
+  readonly mass: number;
+  readonly lastFacing: Vec2;
+
+  hp: number;
   alive = true;
+
+  attackCooldown = 0;
+  chargeState: ChargeState = 'none';
+  chargeCooldown = 0;
+  chargeReady = true;
 
   constructor(options: SoldierOptions) {
     this.id = options.id;
@@ -35,6 +51,24 @@ export class Soldier {
     this.position = options.initialPosition.clone();
     this.velocity = new Vec2();
     this.jitterPhase = this.id * 0.61 + this.slotIndex * 0.27;
+
+    this.archetypeId = options.archetype.id;
+    this.tags = new Set(options.archetype.tags);
+    this.baseStats = {
+      hp: options.archetype.stats.hp,
+      moveSpeed: options.archetype.stats.moveSpeed,
+      attackDamage: options.archetype.stats.attackDamage,
+      attackRate: options.archetype.stats.attackRate,
+      meleeRange: options.archetype.stats.meleeRange,
+      armor: options.archetype.stats.armor,
+      mass: options.archetype.stats.mass,
+      chargePower: options.archetype.stats.chargePower,
+      chargeMinSpeed: options.archetype.stats.chargeMinSpeed,
+    };
+    this.hpMax = this.baseStats.hp;
+    this.mass = this.baseStats.mass;
+    this.hp = this.hpMax;
+    this.lastFacing = new Vec2(Math.cos(this.squad.facing), Math.sin(this.squad.facing));
 
     this.sprite = new Graphics();
     this.sprite.circle(0, 0, SOLDIER_RADIUS);
@@ -60,6 +94,7 @@ export class Soldier {
     if (!this.alive) {
       return;
     }
+
     this.sprite.position.set(this.position.x, this.position.y);
   }
 }

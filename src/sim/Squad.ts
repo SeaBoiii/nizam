@@ -5,15 +5,12 @@ import { computeSlotLocal, estimateFormationRadius } from './Formation';
 import type { Waypoint } from './Orders';
 import { Soldier } from './Soldier';
 import { TeamId, type FormationType, type OrderMode, type WorldBounds } from './types';
+import type { UnitArchetype } from './types/UnitArchetype';
 
-const ANCHOR_MAX_SPEED = 95;
-const ANCHOR_MAX_SPEED_CHARGE = 120;
-const ANCHOR_MAX_SPEED_ROUT = 140;
-const ANCHOR_MAX_ACCEL = 200;
-const SOLDIER_MAX_SPEED = 104;
-const SOLDIER_MAX_SPEED_CHARGE = 128;
-const SOLDIER_MAX_SPEED_ROUT = 142;
-const SOLDIER_MAX_ACCEL = 280;
+const ANCHOR_ACCEL = 210;
+const ANCHOR_CHARGE_SPEED_BONUS = 1.14;
+const ANCHOR_ROUT_SPEED_BONUS = 1.32;
+const SOLDIER_ACCEL_BASE = 280;
 const ARRIVE_RADIUS = 26;
 const SEPARATION_RADIUS = 12;
 const SEPARATION_RADIUS_SQ = SEPARATION_RADIUS * SEPARATION_RADIUS;
@@ -29,6 +26,7 @@ interface SquadOptions {
   initialAnchor: Vec2;
   facing: number;
   soldierCount: number;
+  archetype: UnitArchetype;
   unitLayer: Container;
   overlayLayer: Container;
 }
@@ -44,6 +42,7 @@ export class Squad {
   readonly id: number;
   readonly team: TeamId;
   readonly color: number;
+  readonly archetype: UnitArchetype;
   readonly soldiers: Soldier[] = [];
   readonly initialSize: number;
   readonly anchor: Vec2;
@@ -72,6 +71,7 @@ export class Squad {
     this.id = options.id;
     this.team = options.team;
     this.color = options.color;
+    this.archetype = options.archetype;
     this.anchor = options.initialAnchor.clone();
     this.holdAnchor.copy(this.anchor);
     this.facing = options.facing;
@@ -90,7 +90,6 @@ export class Squad {
       },
     });
     this.label.anchor.set(0.5, 1);
-    this.label.visible = false;
     options.overlayLayer.addChild(this.label);
 
     for (let i = 0; i < options.soldierCount; i += 1) {
@@ -102,10 +101,24 @@ export class Squad {
         slotIndex: i,
         color: this.color,
         initialPosition: this.worldSlotTemp,
+        archetype: this.archetype,
       });
       this.soldiers.push(soldier);
       options.unitLayer.addChild(soldier.sprite);
     }
+
+    this.updateLabel(0);
+  }
+
+  destroy(): void {
+    for (let i = 0; i < this.soldiers.length; i += 1) {
+      const soldier = this.soldiers[i];
+      soldier.sprite.destroy();
+    }
+    this.soldiers.length = 0;
+
+    this.selectionOutline.destroy();
+    this.label.destroy();
   }
 
   hasLivingSoldiers(): boolean {
@@ -131,7 +144,6 @@ export class Squad {
     this.isSelected = selected;
     if (!selected) {
       this.selectionOutline.visible = false;
-      this.label.visible = false;
     }
   }
 
@@ -151,6 +163,7 @@ export class Squad {
 
     this.order = 'move';
     this.reachedMapEdge = false;
+    this.chargeTarget = null;
 
     if (facingOverride !== null) {
       this.desiredFacing = facingOverride;
@@ -180,6 +193,14 @@ export class Squad {
     });
     this.reachedMapEdge = false;
     this.chargeTarget = null;
+  }
+
+  isChargingOrder(): boolean {
+    return this.order === 'charge';
+  }
+
+  getChargeTarget(): Squad | null {
+    return this.chargeTarget;
   }
 
   update(context: SquadUpdateContext): void {
@@ -269,7 +290,7 @@ export class Squad {
     switch (this.order) {
       case 'hold': {
         this.chargeTarget = null;
-        this.driveAnchorToward(this.holdAnchor, context.dt, ANCHOR_MAX_SPEED * 0.35);
+        this.driveAnchorToward(this.holdAnchor, context.dt, this.archetype.stats.moveSpeed * 0.35);
         break;
       }
       case 'move':
@@ -309,7 +330,10 @@ export class Squad {
     }
 
     const waypoint = this.waypoints[0];
-    const maxSpeed = this.order === 'rout' ? ANCHOR_MAX_SPEED_ROUT : ANCHOR_MAX_SPEED;
+    const maxSpeed =
+      this.order === 'rout'
+        ? this.archetype.stats.moveSpeed * ANCHOR_ROUT_SPEED_BONUS
+        : this.archetype.stats.moveSpeed;
     this.driveAnchorToward(waypoint.position, context.dt, maxSpeed);
 
     const distSq = this.anchor.distanceSqTo(waypoint.position);
@@ -348,7 +372,7 @@ export class Squad {
     const toTargetX = target.anchor.x - this.anchor.x;
     const toTargetY = target.anchor.y - this.anchor.y;
     this.desiredFacing = Math.atan2(toTargetY, toTargetX);
-    this.driveAnchorToward(target.anchor, dt, ANCHOR_MAX_SPEED_CHARGE);
+    this.driveAnchorToward(target.anchor, dt, this.archetype.stats.moveSpeed * ANCHOR_CHARGE_SPEED_BONUS);
   }
 
   private findNearestEnemy(allSquads: readonly Squad[]): Squad | null {
@@ -362,6 +386,28 @@ export class Squad {
       }
 
       const distSq = this.anchor.distanceSqTo(other.anchor);
+      if (distSq < nearestDistSq) {
+        nearestDistSq = distSq;
+        nearest = other;
+      }
+    }
+
+    return nearest;
+  }
+
+  private findNearestEnemyToPoint(point: Vec2, allSquads: readonly Squad[]): Squad | null {
+    let nearest: Squad | null = null;
+    let nearestDistSq = Number.POSITIVE_INFINITY;
+
+    for (let i = 0; i < allSquads.length; i += 1) {
+      const other = allSquads[i];
+      if (other.team === this.team || !other.hasLivingSoldiers()) {
+        continue;
+      }
+
+      const dx = other.anchor.x - point.x;
+      const dy = other.anchor.y - point.y;
+      const distSq = dx * dx + dy * dy;
       if (distSq < nearestDistSq) {
         nearestDistSq = distSq;
         nearest = other;
@@ -390,7 +436,7 @@ export class Squad {
     let steerX = desiredVx - this.anchorVelocity.x;
     let steerY = desiredVy - this.anchorVelocity.y;
     const steerLen = Math.hypot(steerX, steerY);
-    const maxSteer = ANCHOR_MAX_ACCEL * dt;
+    const maxSteer = ANCHOR_ACCEL * dt;
     if (steerLen > maxSteer && steerLen > 0.0001) {
       const scale = maxSteer / steerLen;
       steerX *= scale;
@@ -430,20 +476,9 @@ export class Squad {
   }
 
   private updateSoldiers(context: SquadUpdateContext): void {
-    const maxSpeed =
-      this.order === 'rout'
-        ? SOLDIER_MAX_SPEED_ROUT
-        : this.order === 'charge'
-          ? SOLDIER_MAX_SPEED_CHARGE
-          : SOLDIER_MAX_SPEED;
-
-    const chargeBiasX =
-      this.chargeTarget !== null ? this.chargeTarget.anchor.x - this.anchor.x : Math.cos(this.facing);
-    const chargeBiasY =
-      this.chargeTarget !== null ? this.chargeTarget.anchor.y - this.anchor.y : Math.sin(this.facing);
-    const chargeBiasLen = Math.hypot(chargeBiasX, chargeBiasY) || 1;
-    const chargeDirX = chargeBiasX / chargeBiasLen;
-    const chargeDirY = chargeBiasY / chargeBiasLen;
+    const chargeOrder = this.order === 'charge';
+    const slotScale = chargeOrder ? 1.2 : 1;
+    const separationWeight = chargeOrder ? SEPARATION_WEIGHT * 0.8 : SEPARATION_WEIGHT;
 
     for (let i = 0; i < this.soldiers.length; i += 1) {
       const soldier = this.soldiers[i];
@@ -451,13 +486,28 @@ export class Squad {
         continue;
       }
 
-      this.getSlotWorldForIndex(soldier.slotIndex, this.worldSlotTemp);
+      this.getSlotWorldForIndex(soldier.slotIndex, this.worldSlotTemp, slotScale);
+      let targetX = this.worldSlotTemp.x;
+      let targetY = this.worldSlotTemp.y;
 
-      if (this.order === 'charge') {
-        this.worldSlotTemp.x += chargeDirX * 16;
-        this.worldSlotTemp.y += chargeDirY * 16;
-        this.worldSlotTemp.x += Math.sin(context.simTime * 4 + soldier.jitterPhase) * 6;
-        this.worldSlotTemp.y += Math.cos(context.simTime * 4 + soldier.jitterPhase * 1.37) * 6;
+      if (chargeOrder) {
+        const enemySquad = this.findNearestEnemyToPoint(soldier.position, context.allSquads) ?? this.chargeTarget;
+        if (enemySquad !== null) {
+          const chaseX = enemySquad.anchor.x - soldier.position.x;
+          const chaseY = enemySquad.anchor.y - soldier.position.y;
+          const chaseLen = Math.hypot(chaseX, chaseY);
+          if (chaseLen > 0.0001) {
+            const dirX = chaseX / chaseLen;
+            const dirY = chaseY / chaseLen;
+            const pursuitX = soldier.position.x + dirX * 42;
+            const pursuitY = soldier.position.y + dirY * 42;
+            targetX = targetX * 0.55 + pursuitX * 0.45;
+            targetY = targetY * 0.55 + pursuitY * 0.45;
+          }
+        }
+
+        targetX += Math.sin(context.simTime * 4 + soldier.jitterPhase) * 3;
+        targetY += Math.cos(context.simTime * 4 + soldier.jitterPhase * 1.37) * 3;
       }
 
       let separationX = 0;
@@ -485,14 +535,21 @@ export class Squad {
         separationY += (dy / dist) * strength;
       }
 
-      const toTargetX = this.worldSlotTemp.x - soldier.position.x;
-      const toTargetY = this.worldSlotTemp.y - soldier.position.y;
+      const toTargetX = targetX - soldier.position.x;
+      const toTargetY = targetY - soldier.position.y;
       const targetDist = Math.hypot(toTargetX, toTargetY);
+
+      let moveSpeed = soldier.baseStats.moveSpeed;
+      if (this.order === 'charge') {
+        moveSpeed *= 1.1;
+      } else if (this.order === 'rout') {
+        moveSpeed *= 1.22;
+      }
 
       let desiredVx = 0;
       let desiredVy = 0;
       if (targetDist > 0.0001) {
-        let desiredSpeed = maxSpeed;
+        let desiredSpeed = moveSpeed;
         if (targetDist < 24) {
           desiredSpeed *= targetDist / 24;
         }
@@ -501,10 +558,10 @@ export class Squad {
         desiredVy = (toTargetY / targetDist) * desiredSpeed;
       }
 
-      let accelX = desiredVx - soldier.velocity.x + separationX * SEPARATION_WEIGHT;
-      let accelY = desiredVy - soldier.velocity.y + separationY * SEPARATION_WEIGHT;
+      let accelX = desiredVx - soldier.velocity.x + separationX * separationWeight;
+      let accelY = desiredVy - soldier.velocity.y + separationY * separationWeight;
       const accelLen = Math.hypot(accelX, accelY);
-      const accelLimit = SOLDIER_MAX_ACCEL * context.dt;
+      const accelLimit = (SOLDIER_ACCEL_BASE / soldier.mass) * context.dt;
       if (accelLen > accelLimit && accelLen > 0.0001) {
         const scale = accelLimit / accelLen;
         accelX *= scale;
@@ -515,8 +572,8 @@ export class Squad {
       soldier.velocity.y += accelY;
 
       const velocityLen = soldier.velocity.len();
-      if (velocityLen > maxSpeed) {
-        soldier.velocity.scale(maxSpeed / velocityLen);
+      if (velocityLen > moveSpeed) {
+        soldier.velocity.scale(moveSpeed / velocityLen);
       }
 
       soldier.position.x += soldier.velocity.x * context.dt;
@@ -529,29 +586,39 @@ export class Squad {
   }
 
   private updateSelectionOverlay(): void {
-    if (!this.isSelected || !this.hasLivingSoldiers()) {
+    if (!this.hasLivingSoldiers()) {
       this.selectionOutline.visible = false;
       this.label.visible = false;
       return;
     }
 
     const radius = estimateFormationRadius(this.formation, this.initialSize);
-    this.selectionOutline.visible = true;
-    this.selectionOutline.clear();
-    this.selectionOutline.circle(this.anchor.x, this.anchor.y, radius);
-    this.selectionOutline.stroke({
-      color: 0xffea8a,
-      alpha: 0.9,
-      width: 2,
-    });
+    if (this.isSelected) {
+      this.selectionOutline.visible = true;
+      this.selectionOutline.clear();
+      this.selectionOutline.circle(this.anchor.x, this.anchor.y, radius);
+      this.selectionOutline.stroke({
+        color: 0xffea8a,
+        alpha: 0.9,
+        width: 2,
+      });
+    } else {
+      this.selectionOutline.visible = false;
+    }
 
+    this.updateLabel(radius);
+  }
+
+  private updateLabel(radius: number): void {
     this.label.visible = true;
-    this.label.text = `S${this.id}  ${Math.round(this.morale)}%`;
+    this.label.alpha = this.isSelected ? 1 : 0.76;
+    this.label.text = `S${this.id} ${this.archetype.name} ${Math.round(this.morale)}%`;
     this.label.position.set(this.anchor.x, this.anchor.y - radius - 8);
   }
 
-  private getSlotWorldForIndex(slotIndex: number, out: Vec2): Vec2 {
+  private getSlotWorldForIndex(slotIndex: number, out: Vec2, slotScale = 1): Vec2 {
     computeSlotLocal(this.formation, slotIndex, this.initialSize, this.slotTemp);
+    this.slotTemp.scale(slotScale);
 
     const rightX = -Math.sin(this.facing);
     const rightY = Math.cos(this.facing);

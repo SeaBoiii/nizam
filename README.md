@@ -81,17 +81,31 @@ On GitHub Actions, `REPO_NAME` is set automatically from `${{ github.event.repos
 - Hold: `H`
 - Charge nearest enemy: `C`
 - Retreat to map edge: `R`
+- Restart match: `N`
+
+## Objective and match flow
+
+- A single capture point sits at the center of the battlefield.
+- Alive units inside the objective radius generate capture pressure.
+- If one team has more units inside, that team gains capture progress and the other side loses some progress.
+- If both teams are equally present, progress slowly decays toward neutral.
+- First side to reach `100%` capture progress wins the match.
+- End screen appears with winner; press `N` to restart from fresh spawns.
 
 ## Gameplay model included
 
 - 2 teams (Blue vs Red), 3 squads each
+- Squad archetypes: Infantry, Spearmen, Cavalry (Archers archetype data included for extension)
 - ~30 soldiers per squad
 - Formation slots with stable slot assignment
 - Steering with arrive + separation
 - Spatial hash melee checks (not O(n^2))
 - HP, casualties, morale, flank pressure, rout/recovery
+- Directional melee damage (rear/flank/front + shield mitigation)
+- Cavalry charge burst with knockback and spear counter behavior
 - Fixed timestep simulation (1/60)
-- HUD with FPS/selection/formation/order
+- HUD with FPS/selection/archetype/formation/order
+- Objective HUD (Blue/Red capture progress and contested state)
 - Waypoint path rendering for selected squads
 
 ## Troubleshooting blank page on Pages

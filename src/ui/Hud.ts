@@ -3,6 +3,7 @@ import { Container, Text } from 'pixi.js';
 export interface HudState {
   fps: number;
   selectedCount: number;
+  selectedArchetypes: string;
   formation: string;
   orderMode: string;
 }
@@ -28,6 +29,7 @@ export class Hud {
     this.text.text = [
       `FPS: ${state.fps.toFixed(0)}`,
       `Selected: ${state.selectedCount}`,
+      `Archetype: ${state.selectedArchetypes}`,
       `Formation: ${state.formation}`,
       `Order: ${state.orderMode}`,
     ].join('\n');
