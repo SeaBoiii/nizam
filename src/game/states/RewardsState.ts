@@ -6,6 +6,7 @@ import { TextButton } from '../../ui/widgets/TextButton';
 import { archetypeChoices, archetypeDisplayName, canUpgradeSquad, upgradeSquadTier } from '../../meta/Progression';
 import { createSquadMeta } from '../../meta/Army';
 import { SeededRng } from '../../utils/rng';
+import { objectiveDisplayName } from '../../sim/objectives/ObjectiveTypes';
 
 export class RewardsState implements IGameState {
   private readonly root = new Container();
@@ -103,6 +104,7 @@ export class RewardsState implements IGameState {
     this.title.text = victory ? 'Victory Rewards' : 'Defeat Spoils';
     this.summary.text = [
       `Outcome: ${victory ? 'Victory' : 'Defeat'}`,
+      `Objective: ${objectiveDisplayName(resolvedResult.scenario.objectiveType)}`,
       `Player casualties: ${resolvedResult.playerCasualties}`,
       `Enemy casualties: ${resolvedResult.enemyCasualties}`,
     ].join('\n');

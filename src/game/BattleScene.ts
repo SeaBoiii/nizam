@@ -19,6 +19,9 @@ import type { BattleResult, BattleScenario } from '../meta/types';
 import type { ArmyState, SquadMeta } from '../meta/Army';
 import { getTieredArchetype } from '../meta/Progression';
 import type { UnitArchetype } from '../sim/types/UnitArchetype';
+import { createObjectiveForScenario } from '../sim/objectives/createObjective';
+import type { ObjectiveMinimapMarker, ObjectiveSpawnSquadRequest, ObjectiveWorld } from '../sim/objectives/IObjective';
+import { AIDirector } from '../sim/ai/AIDirector';
 
 const FIXED_DT = 1 / 60;
 const WORLD_WIDTH = 4000;
@@ -69,6 +72,7 @@ export class BattleScene {
   private readonly worldLayer = new Container();
   private readonly mapLayer = new Graphics();
   private readonly objectiveLayer = new Container();
+  private readonly objectiveGraphics = new Graphics();
   private readonly waypointLayer = new Graphics();
   private readonly unitLayer = new Container();
   private readonly projectileLayer = new Container();
@@ -84,14 +88,17 @@ export class BattleScene {
   private readonly combat = new CombatSystem();
   private readonly rangedSystem = new RangedSystem();
   private readonly unitGrid = new SpatialHash(32);
+  private readonly aiDirector = new AIDirector();
 
   private readonly objectiveManager: ObjectiveManager;
   private readonly projectileSystem: ProjectileSystem;
+  private readonly objectiveWorld: ObjectiveWorld;
 
   private readonly squads: Squad[] = [];
   private readonly selectedSquads = new Set<Squad>();
   private readonly keys = new Set<string>();
   private readonly aliveSoldiers: Soldier[] = [];
+  private readonly minimapMarkers: ObjectiveMinimapMarker[] = [];
 
   private readonly pointerScreen = new Vec2();
   private readonly pointerWorld = new Vec2();
@@ -110,6 +117,7 @@ export class BattleScene {
   private fps = 60;
   private lastOrderMode = 'IDLE';
   private finished = false;
+  private nextSquadId = 1;
 
   private playerInitial = 0;
   private enemyInitial = 0;
@@ -121,11 +129,7 @@ export class BattleScene {
     this.armyState = options.armyState;
     this.onFinished = options.onFinished;
 
-    this.objectiveManager = new ObjectiveManager(
-      new Vec2(WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5),
-      240,
-      this.scenario.captureSpeedMultiplier,
-    );
+    this.objectiveManager = new ObjectiveManager(createObjectiveForScenario(this.scenario, this.worldBounds));
 
     this.root.addChild(this.worldLayer);
     this.worldLayer.addChild(this.mapLayer);
@@ -137,7 +141,7 @@ export class BattleScene {
     this.root.addChild(this.uiLayer);
     this.parent.addChild(this.root);
 
-    this.objectiveLayer.addChild(this.objectiveManager.capturePoint.graphics);
+    this.overlayLayer.addChild(this.objectiveGraphics);
 
     this.camera = new Camera(this.worldBounds);
     this.hud = new Hud(this.uiLayer);
@@ -153,8 +157,18 @@ export class BattleScene {
       dt: FIXED_DT,
       simTime: 0,
       world: this.worldBounds,
-      objectivePosition: this.objectiveManager.capturePoint.position,
+      objectivePosition: new Vec2(this.worldBounds.width * 0.5, this.worldBounds.height * 0.5),
       allSquads: this.squads,
+    };
+
+    this.objectiveWorld = {
+      scenario: this.scenario,
+      bounds: this.worldBounds,
+      objectiveCenter: new Vec2(this.worldBounds.width * 0.5, this.worldBounds.height * 0.5),
+      simTime: 0,
+      squads: this.squads,
+      aliveSoldiers: this.aliveSoldiers,
+      spawnSquad: (request) => this.spawnObjectiveSquad(request),
     };
 
     this.camera.position.set(this.worldBounds.width * 0.5, this.worldBounds.height * 0.5);
@@ -163,6 +177,7 @@ export class BattleScene {
     this.minimap.resize(this.app.screen.width, this.app.screen.height);
 
     this.spawnTeams();
+    this.objectiveManager.onStart(this.objectiveWorld);
     this.collectAliveSoldiers();
     this.rebuildUnitGrid();
 
@@ -233,51 +248,107 @@ export class BattleScene {
   }
 
   private spawnTeams(): void {
-    let squadId = 1;
-
     const playerSquads = this.armyState.squads;
     this.playerInitial = 0;
+    this.enemyInitial = 0;
+    this.nextSquadId = 1;
+
     for (let i = 0; i < playerSquads.length; i += 1) {
       const squadMeta = playerSquads[i];
       const archetype = this.makeArchetypeForMeta(squadMeta, true);
       const position = this.computeFormationSpawn(i, playerSquads.length, TeamId.Blue);
-      const squad = new Squad({
-        id: squadId,
-        team: TeamId.Blue,
-        color: this.teamColor(archetype.id, TeamId.Blue),
-        initialAnchor: position,
-        facing: 0,
-        soldierCount: squadMeta.size,
+      this.spawnRuntimeSquad(
+        TeamId.Blue,
         archetype,
-        unitLayer: this.unitLayer,
-        overlayLayer: this.overlayLayer,
-      });
-      this.squads.push(squad);
-      this.playerInitial += squadMeta.size;
-      squadId += 1;
+        squadMeta.size,
+        position.x,
+        position.y,
+        0,
+        undefined,
+        true,
+      );
     }
 
     const enemySquads = this.scenario.enemySquads;
-    this.enemyInitial = 0;
     for (let i = 0; i < enemySquads.length; i += 1) {
       const squadMeta = enemySquads[i];
       const archetype = this.makeArchetypeForMeta(squadMeta, false);
       const position = this.computeFormationSpawn(i, enemySquads.length, TeamId.Red);
-      const squad = new Squad({
-        id: squadId,
-        team: TeamId.Red,
-        color: this.teamColor(archetype.id, TeamId.Red),
-        initialAnchor: position,
-        facing: Math.PI,
-        soldierCount: squadMeta.size,
+      this.spawnRuntimeSquad(
+        TeamId.Red,
         archetype,
-        unitLayer: this.unitLayer,
-        overlayLayer: this.overlayLayer,
-      });
-      this.squads.push(squad);
-      this.enemyInitial += squadMeta.size;
-      squadId += 1;
+        squadMeta.size,
+        position.x,
+        position.y,
+        Math.PI,
+        undefined,
+        true,
+      );
     }
+  }
+
+  private spawnObjectiveSquad(request: ObjectiveSpawnSquadRequest): Squad {
+    let archetype = request.archetypeOverride ?? getTieredArchetype(request.archetypeId, Math.max(1, request.tier));
+    if (
+      request.archetypeOverride === undefined &&
+      request.team === TeamId.Blue &&
+      this.scenario.playerHpBuffMultiplier > 1
+    ) {
+      archetype = {
+        id: archetype.id,
+        name: archetype.name,
+        tags: [...archetype.tags],
+        stats: {
+          ...archetype.stats,
+          hp: archetype.stats.hp * this.scenario.playerHpBuffMultiplier,
+        },
+      };
+    }
+
+    return this.spawnRuntimeSquad(
+      request.team,
+      archetype,
+      request.soldierCount,
+      request.x,
+      request.y,
+      request.facing,
+      request.color,
+      request.commandable ?? true,
+    );
+  }
+
+  private spawnRuntimeSquad(
+    team: TeamId,
+    archetype: UnitArchetype,
+    soldierCount: number,
+    x: number,
+    y: number,
+    facing: number,
+    color: number | undefined,
+    commandable: boolean,
+  ): Squad {
+    const squad = new Squad({
+      id: this.nextSquadId,
+      team,
+      color: color ?? this.teamColor(archetype.id, team),
+      initialAnchor: new Vec2(x, y),
+      facing,
+      soldierCount,
+      archetype,
+      unitLayer: this.unitLayer,
+      overlayLayer: this.overlayLayer,
+      commandable,
+    });
+    this.nextSquadId += 1;
+    this.squads.push(squad);
+
+    if (team === TeamId.Blue) {
+      this.playerInitial += soldierCount;
+    } else {
+      this.enemyInitial += soldierCount;
+    }
+
+    return squad;
   }
 
   private teamColor(archetypeId: string, team: TeamId): number {
@@ -589,7 +660,7 @@ export class BattleScene {
         continue;
       }
 
-      if (squad.team !== TeamId.Blue) {
+      if (squad.team !== TeamId.Blue || !squad.commandable) {
         continue;
       }
 
@@ -627,7 +698,7 @@ export class BattleScene {
 
     for (let i = 0; i < this.squads.length; i += 1) {
       const squad = this.squads[i];
-      if (!squad.hasLivingSoldiers() || squad.team !== TeamId.Blue) {
+      if (!squad.hasLivingSoldiers() || squad.team !== TeamId.Blue || !squad.commandable) {
         continue;
       }
 
@@ -654,6 +725,10 @@ export class BattleScene {
   private fixedUpdate(dt: number): void {
     this.simTime += dt;
     this.updateCameraPan(dt);
+    this.objectiveWorld.simTime = this.simTime;
+
+    const tacticalBefore = this.objectiveManager.getTacticalState();
+    this.squadUpdateContext.objectivePosition = tacticalBefore.focusPosition;
 
     this.squadUpdateContext.dt = dt;
     this.squadUpdateContext.simTime = this.simTime;
@@ -670,16 +745,30 @@ export class BattleScene {
     this.projectileSystem.update(dt, this.aliveSoldiers, this.unitGrid);
 
     this.collectAliveSoldiers();
-    this.objectiveManager.update(dt, this.aliveSoldiers);
+    this.objectiveManager.update(dt, this.objectiveWorld);
 
-    const winnerByObjective = this.objectiveManager.getStatus().winner;
+    const winnerByObjective = this.objectiveManager.getWinner();
     if (winnerByObjective !== null) {
-      this.finishBattle(winnerByObjective === TeamId.Blue);
+      this.finishBattle(winnerByObjective === 'blue');
       return;
     }
 
+    this.aiDirector.update(dt, {
+      world: this.worldBounds,
+      squads: this.squads,
+      objective: this.objectiveManager.getTacticalState(),
+    });
+
     const playerRemaining = this.countTeamAlive(TeamId.Blue);
     const enemyRemaining = this.countTeamAlive(TeamId.Red);
+
+    const objectiveType = this.objectiveManager.getType();
+    if (objectiveType === 'HOLDOUT' || objectiveType === 'ESCORT') {
+      if (playerRemaining <= 0) {
+        this.finishBattle(false);
+      }
+      return;
+    }
 
     if (enemyRemaining <= 0) {
       this.finishBattle(true);
@@ -774,10 +863,9 @@ export class BattleScene {
 
   private renderFrame(): void {
     this.camera.applyTo(this.worldLayer);
+    this.objectiveManager.renderOverlay(this.objectiveGraphics, this.camera);
     this.drawWaypointPaths();
     this.squadIndicators.update(this.squads);
-
-    const objectiveStatus = this.objectiveManager.getStatus();
 
     this.hud.update({
       fps: this.fps,
@@ -787,20 +875,10 @@ export class BattleScene {
       orderMode: this.currentSelectedOrderLabel(),
     });
 
-    this.objectiveHud.update({
-      blueProgress: objectiveStatus.progressBlue,
-      redProgress: objectiveStatus.progressRed,
-      blueInside: objectiveStatus.blueInside,
-      redInside: objectiveStatus.redInside,
-      contested: objectiveStatus.contested,
-    });
+    this.objectiveHud.update(this.objectiveManager.getHUDState());
 
-    this.minimap.update(
-      this.squads,
-      this.aliveSoldiers,
-      this.objectiveManager.capturePoint.position,
-      this.objectiveManager.capturePoint.radius,
-    );
+    this.objectiveManager.getMinimapMarkers(this.minimapMarkers);
+    this.minimap.update(this.squads, this.aliveSoldiers, this.minimapMarkers);
   }
 
   private drawWaypointPaths(): void {

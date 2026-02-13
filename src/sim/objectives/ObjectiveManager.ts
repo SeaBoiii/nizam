@@ -1,55 +1,48 @@
-import { TeamId } from '../types';
-import type { Soldier } from '../Soldier';
-import { CapturePoint } from './CapturePoint';
-import { Vec2 } from '../../utils/vec2';
-
-export interface ObjectiveStatus {
-  progressBlue: number;
-  progressRed: number;
-  blueInside: number;
-  redInside: number;
-  contested: boolean;
-  winner: TeamId | null;
-}
+import type { Graphics } from 'pixi.js';
+import type { Camera } from '../../game/Camera';
+import type { IObjective, ObjectiveHUDState, ObjectiveMinimapMarker, ObjectiveTacticalState, ObjectiveWorld } from './IObjective';
+import type { BattleObjectiveType } from './ObjectiveTypes';
 
 export class ObjectiveManager {
-  readonly capturePoint: CapturePoint;
+  constructor(private readonly objective: IObjective) {}
 
-  private status: ObjectiveStatus = {
-    progressBlue: 0,
-    progressRed: 0,
-    blueInside: 0,
-    redInside: 0,
-    contested: false,
-    winner: null,
-  };
-
-  constructor(position: Vec2, radius: number, captureRateMultiplier = 1) {
-    this.capturePoint = new CapturePoint(position, radius, captureRateMultiplier);
+  onStart(world: ObjectiveWorld): void {
+    this.objective.onStart(world);
   }
 
-  reset(): void {
-    this.capturePoint.reset();
-    this.status.progressBlue = 0;
-    this.status.progressRed = 0;
-    this.status.blueInside = 0;
-    this.status.redInside = 0;
-    this.status.contested = false;
-    this.status.winner = null;
+  update(dt: number, world: ObjectiveWorld): void {
+    this.objective.update(dt, world);
   }
 
-  update(dt: number, aliveSoldiers: readonly Soldier[]): void {
-    this.capturePoint.update(dt, aliveSoldiers);
-
-    this.status.progressBlue = this.capturePoint.progressBlue;
-    this.status.progressRed = this.capturePoint.progressRed;
-    this.status.blueInside = this.capturePoint.blueInside;
-    this.status.redInside = this.capturePoint.redInside;
-    this.status.contested = this.capturePoint.isContested();
-    this.status.winner = this.capturePoint.winner();
+  isComplete(): boolean {
+    return this.objective.isComplete();
   }
 
-  getStatus(): ObjectiveStatus {
-    return this.status;
+  getWinner(): 'blue' | 'red' | null {
+    return this.objective.getWinner();
+  }
+
+  getHUDState(): ObjectiveHUDState {
+    return this.objective.getHUDState();
+  }
+
+  getType(): BattleObjectiveType {
+    return this.objective.type;
+  }
+
+  getTacticalState(): ObjectiveTacticalState {
+    return this.objective.getTacticalState();
+  }
+
+  getMinimapMarkers(out: ObjectiveMinimapMarker[]): void {
+    this.objective.getMinimapMarkers(out);
+  }
+
+  renderOverlay(gfx: Graphics, camera: Camera): void {
+    if (this.objective.renderOverlay) {
+      this.objective.renderOverlay(gfx, camera);
+      return;
+    }
+    gfx.clear();
   }
 }

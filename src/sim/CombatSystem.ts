@@ -27,6 +27,10 @@ export class CombatSystem {
         continue;
       }
 
+       if (attacker.baseStats.attackDamage <= 0 || attacker.baseStats.meleeRange <= 0) {
+        continue;
+      }
+
       const target = this.findNearestEnemyInRange(attacker, spatialGrid);
       if (target === null || !target.alive) {
         continue;

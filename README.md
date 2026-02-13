@@ -71,6 +71,7 @@ On GitHub Actions, `REPO_NAME` is set automatically from `${{ github.event.repos
 - Start with **New Run** or **Continue** on the title screen.
 - Progress by clicking connected overworld nodes.
 - Battle/Elite/Boss nodes launch tactical battles.
+- Hovering battle nodes shows the upcoming objective type.
 - Rewards are granted after battle and one bonus choice is required.
 - Save data is persisted in localStorage (`nizam_save_v1`) and used by **Continue**.
 
@@ -92,14 +93,14 @@ On GitHub Actions, `REPO_NAME` is set automatically from `${{ github.event.repos
 - Battle volley (ranged stance): `V`
 - Battle skirmish (kite while shooting): `K`
 
-## Battle objective
+## Battle objectives (Sprint 4)
 
-- A single capture point sits at the center of the battlefield.
-- Alive units inside the objective radius generate capture pressure.
-- If one team has more units inside, that team gains capture progress and the other side loses some progress.
-- If both teams are equally present, progress slowly decays toward neutral.
-- First side to reach `100%` capture progress wins the match.
-- Result transitions to rewards, then returns to overworld progression.
+- `Capture Point`: classic central capture objective.
+- `Decapitation` (`ASSASSINATE`): kill the enemy commander before yours dies.
+- `Last Stand` (`HOLDOUT`): survive the timer while enemy reinforcement waves attack.
+- `Caravan Run` (`ESCORT`): protect the caravan to the exit zone.
+- Overworld battle nodes now preview objective type in the tooltip.
+- Objective variants are selected deterministically from run seed + node id.
 
 ## Ranged combat (Sprint 2)
 
@@ -137,10 +138,11 @@ On GitHub Actions, `REPO_NAME` is set automatically from `${{ github.event.repos
 - Real projectile simulation for ranged units (gravity + lifetime + collision)
 - Fixed timestep simulation (1/60)
 - HUD with FPS/selection/archetype/formation/order
-- Objective HUD (Blue/Red capture progress and contested state)
-- Minimap with units/squads/capture point
+- Objective HUD (dynamic by objective type, with timers/goal bars where relevant)
+- Minimap with units/squads and objective markers
 - Squad banners + morale bars for battlefield readability
 - Waypoint path rendering for selected squads
+- Enemy AI Director issuing tactical HOLD/CHARGE/VOLLEY/SKIRMISH orders by role/objective
 
 ## Troubleshooting blank page on Pages
 

@@ -3,8 +3,31 @@ import { clampTier, squadPowerScore } from './Progression';
 import type { BattleScenario } from './types';
 import type { NodeType, RunState } from '../overworld/types';
 import { SeededRng } from '../utils/rng';
+import { objectiveDisplayName, type BattleObjectiveType } from '../sim/objectives/ObjectiveTypes';
+import {
+  CAPTURE_SPEED_BOSS,
+  CAPTURE_SPEED_ELITE,
+  ESCORT_TIME_LIMIT_SECONDS,
+  HOLDOUT_DURATION_SECONDS,
+  HOLDOUT_MAX_WAVES,
+  HOLDOUT_WAVE_INTERVAL_SECONDS,
+  OBJECTIVE_BATTLE_CAPTURE_CHANCE,
+  OBJECTIVE_BATTLE_ESCORT_CHANCE,
+  OBJECTIVE_BATTLE_HOLDOUT_CHANCE,
+  OBJECTIVE_BOSS_CAPTURE_CHANCE,
+  OBJECTIVE_ELITE_CAPTURE_CHANCE,
+} from '../sim/rules/ObjectiveTuning';
 
 const ENEMY_ARCHETYPES = ['infantry', 'spearmen', 'cavalry', 'archers'] as const;
+
+function hashText(value: string): number {
+  let hash = 2166136261 >>> 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return hash >>> 0;
+}
 
 function hashNodeType(nodeType: NodeType): number {
   let hash = 0;
@@ -28,7 +51,14 @@ function createEnemySquad(
   };
 }
 
-function scenarioScale(nodeType: NodeType): number {
+function scenarioScale(nodeType: NodeType, objectiveType: BattleObjectiveType): number {
+  if (objectiveType === 'HOLDOUT') {
+    return 0.68;
+  }
+  if (objectiveType === 'ESCORT') {
+    return 0.88;
+  }
+
   switch (nodeType) {
     case 'BATTLE':
       return 0.97;
@@ -43,10 +73,10 @@ function scenarioScale(nodeType: NodeType): number {
 
 function captureSpeed(nodeType: NodeType): number {
   if (nodeType === 'ELITE') {
-    return 0.78;
+    return CAPTURE_SPEED_ELITE;
   }
   if (nodeType === 'BOSS') {
-    return 0.62;
+    return CAPTURE_SPEED_BOSS;
   }
   return 1;
 }
@@ -71,16 +101,53 @@ function generateBossSquads(rng: SeededRng, tier: number, step: number): SquadMe
   ];
 }
 
+function objectiveSeed(nodeId: string, nodeType: NodeType, runState: RunState): number {
+  return (runState.seed ^ hashText(nodeId) ^ hashNodeType(nodeType) ^ 0x5f3759df) >>> 0;
+}
+
+export function selectObjectiveType(nodeId: string, nodeType: NodeType, runState: RunState): BattleObjectiveType {
+  const seed = objectiveSeed(nodeId, nodeType, runState);
+  const rng = new SeededRng(seed);
+
+  if (nodeType === 'BATTLE') {
+    const roll = rng.next();
+    if (roll < OBJECTIVE_BATTLE_HOLDOUT_CHANCE) {
+      return 'HOLDOUT';
+    }
+    if (roll < OBJECTIVE_BATTLE_HOLDOUT_CHANCE + OBJECTIVE_BATTLE_ESCORT_CHANCE) {
+      return 'ESCORT';
+    }
+    return rng.chance(OBJECTIVE_BATTLE_CAPTURE_CHANCE) ? 'CAPTURE' : 'ASSASSINATE';
+  }
+
+  if (nodeType === 'ELITE') {
+    return rng.chance(OBJECTIVE_ELITE_CAPTURE_CHANCE) ? 'CAPTURE' : 'ASSASSINATE';
+  }
+
+  if (nodeType === 'BOSS') {
+    return rng.chance(OBJECTIVE_BOSS_CAPTURE_CHANCE) ? 'CAPTURE' : 'ASSASSINATE';
+  }
+
+  return 'CAPTURE';
+}
+
+export function objectivePreviewLabel(nodeId: string, nodeType: NodeType, runState: RunState): string {
+  return objectiveDisplayName(selectObjectiveType(nodeId, nodeType, runState));
+}
+
 export function createScenario(
   nodeId: string,
   nodeType: NodeType,
   runState: RunState,
   armyState: ArmyState,
 ): BattleScenario {
-  const seed = (runState.seed ^ ((runState.step + 1) * 2654435761) ^ hashNodeType(nodeType)) >>> 0;
-  const rng = new SeededRng(seed);
+  const scenarioSeed =
+    (runState.seed ^ ((runState.step + 1) * 2654435761) ^ hashNodeType(nodeType) ^ hashText(nodeId)) >>> 0;
+  const rng = new SeededRng(scenarioSeed);
 
   const difficultyTier = Math.max(1, runState.difficultyTier);
+  const objectiveType = selectObjectiveType(nodeId, nodeType, runState);
+  const selectedObjectiveSeed = objectiveSeed(nodeId, nodeType, runState);
   const playerPower = armyState.squads.reduce((sum, squad) => sum + squadPowerScore(squad), 0);
 
   let enemySquads: SquadMeta[] = [];
@@ -88,8 +155,9 @@ export function createScenario(
   if (nodeType === 'BOSS') {
     enemySquads = generateBossSquads(rng, difficultyTier, runState.step);
   } else {
-    const targetPower = playerPower * scenarioScale(nodeType) * (1 + (difficultyTier - 1) * 0.08);
-    const squadCount = nodeType === 'ELITE' ? rng.int(2, 3) : rng.int(3, 4);
+    const targetPower = playerPower * scenarioScale(nodeType, objectiveType) * (1 + (difficultyTier - 1) * 0.08);
+    const baseSquadCount = nodeType === 'ELITE' ? rng.int(2, 3) : rng.int(3, 4);
+    const squadCount = objectiveType === 'HOLDOUT' ? Math.max(1, baseSquadCount - 1) : baseSquadCount;
 
     let power = 0;
     for (let i = 0; i < squadCount; i += 1) {
@@ -108,11 +176,25 @@ export function createScenario(
     }
   }
 
+  const holdoutDurationSeconds =
+    objectiveType === 'HOLDOUT' ? Math.max(95, HOLDOUT_DURATION_SECONDS - difficultyTier * 3) : undefined;
+  const holdoutWaveInterval =
+    objectiveType === 'HOLDOUT' ? Math.max(17, HOLDOUT_WAVE_INTERVAL_SECONDS - difficultyTier * 0.75) : undefined;
+  const holdoutMaxWaves = objectiveType === 'HOLDOUT' ? HOLDOUT_MAX_WAVES : undefined;
+  const escortTimeLimitSeconds =
+    objectiveType === 'ESCORT' ? Math.max(130, ESCORT_TIME_LIMIT_SECONDS - difficultyTier * 4) : undefined;
+
   return {
     nodeId,
     nodeType,
-    objectiveType: 'capture',
+    objectiveType,
     captureSpeedMultiplier: captureSpeed(nodeType),
+    holdoutDurationSeconds,
+    holdoutWaveInterval,
+    holdoutMaxWaves,
+    escortTimeLimitSeconds,
+    objectiveSeed: selectedObjectiveSeed,
+    difficultyTier,
     enemySquads,
     goldReward: rewardGold(nodeType, difficultyTier, rng),
     recruitsReward: rewardRecruits(nodeType, difficultyTier, rng),

@@ -1,11 +1,18 @@
 import type { SquadMeta } from './Army';
 import type { NodeType } from '../overworld/types';
+import type { BattleObjectiveType } from '../sim/objectives/ObjectiveTypes';
 
 export interface BattleScenario {
   nodeId: string;
   nodeType: NodeType;
-  objectiveType: 'capture';
+  objectiveType: BattleObjectiveType;
   captureSpeedMultiplier: number;
+  holdoutDurationSeconds?: number;
+  holdoutWaveInterval?: number;
+  holdoutMaxWaves?: number;
+  escortTimeLimitSeconds?: number;
+  objectiveSeed: number;
+  difficultyTier: number;
   enemySquads: SquadMeta[];
   goldReward: number;
   recruitsReward: number;

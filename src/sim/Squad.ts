@@ -31,6 +31,7 @@ interface SquadOptions {
   archetype: UnitArchetype;
   unitLayer: Container;
   overlayLayer: Container;
+  commandable?: boolean;
 }
 
 export interface SquadUpdateContext {
@@ -48,6 +49,7 @@ export class Squad {
   readonly archetype: UnitArchetype;
   readonly soldiers: Soldier[] = [];
   readonly initialSize: number;
+  readonly commandable: boolean;
   readonly anchor: Vec2;
   readonly anchorVelocity = new Vec2();
   readonly holdAnchor = new Vec2();
@@ -80,6 +82,7 @@ export class Squad {
     this.holdAnchor.copy(this.anchor);
     this.facing = options.facing;
     this.initialSize = options.soldierCount;
+    this.commandable = options.commandable ?? true;
 
     this.selectionOutline = new Graphics();
     this.selectionOutline.visible = false;
@@ -229,9 +232,14 @@ export class Squad {
       return;
     }
 
-    this.updateMorale(context);
+    const usesMorale = !this.archetype.tags.includes('caravan');
+    if (usesMorale) {
+      this.updateMorale(context);
+    } else {
+      this.morale = 100;
+    }
 
-    if (this.order !== 'rout' && this.morale < 25) {
+    if (usesMorale && this.order !== 'rout' && this.morale < 25) {
       this.enterRout(context.world);
     }
 
@@ -243,7 +251,7 @@ export class Squad {
     this.updateSoldiers(context);
     this.updateSelectionOverlay();
 
-    if (this.order === 'rout' && (this.morale > 35 || this.reachedMapEdge)) {
+    if (usesMorale && this.order === 'rout' && (this.morale > 35 || this.reachedMapEdge)) {
       this.holdPosition();
     }
   }

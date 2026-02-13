@@ -62,6 +62,9 @@ export class Camera {
   }
 
   applyTo(container: Container): void {
+    if (container.destroyed || !container.scale || !container.position) {
+      return;
+    }
     container.scale.set(this.zoom, this.zoom);
     container.position.set(
       this.viewportWidth * 0.5 - this.position.x * this.zoom,

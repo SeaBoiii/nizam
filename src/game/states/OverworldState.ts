@@ -2,7 +2,7 @@ import { Container, Graphics, Text } from 'pixi.js';
 import type { IGameState } from './IGameState';
 import type { StateContext } from './StateContext';
 import type { MapState, Node, NodeType } from '../../overworld/types';
-import { createScenario } from '../../meta/ScenarioFactory';
+import { createScenario, objectivePreviewLabel } from '../../meta/ScenarioFactory';
 import { TextButton } from '../../ui/widgets/TextButton';
 import { archetypeChoices, archetypeDisplayName } from '../../meta/Progression';
 import { createSquadMeta } from '../../meta/Army';
@@ -413,7 +413,12 @@ export class OverworldState implements IGameState {
     if (this.hoveredNodeId) {
       const node = this.getNodeById(mapState, this.hoveredNodeId);
       if (node) {
-        this.tooltipText.text = `${node.type} - ${nodeRewardHint(node.type)}`;
+        if (isBattleNode(node.type)) {
+          const objectiveLabel = objectivePreviewLabel(node.id, node.type, campaign.runState);
+          this.tooltipText.text = `${node.type} (${objectiveLabel}) - ${nodeRewardHint(node.type)}`;
+        } else {
+          this.tooltipText.text = `${node.type} - ${nodeRewardHint(node.type)}`;
+        }
       } else {
         this.tooltipText.text = '';
       }
