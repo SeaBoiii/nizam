@@ -1,3 +1,4 @@
+import { contentManager } from '../content/ContentManager';
 import { SeededRng } from '../utils/rng';
 import type { MapState, Node, NodeType } from './types';
 
@@ -6,18 +7,33 @@ const MAP_HEIGHT = 560;
 const MAP_PADDING_X = 60;
 const MAP_PADDING_Y = 54;
 
-function pickNodeType(rng: SeededRng): NodeType {
-  const roll = rng.next();
-  if (roll < 0.52) {
+function pickNodeType(rng: SeededRng, depth: number): NodeType {
+  const nodeTuning = contentManager.getNodeTuning();
+  let weights = nodeTuning.nodeTypeWeightsByDepth[0].weights;
+  for (let i = 0; i < nodeTuning.nodeTypeWeightsByDepth.length; i += 1) {
+    const band = nodeTuning.nodeTypeWeightsByDepth[i];
+    if (depth >= band.depthMin && depth <= band.depthMax) {
+      weights = band.weights;
+      break;
+    }
+  }
+
+  const total = Math.max(0.0001, weights.BATTLE + weights.SHOP + weights.RECRUIT + weights.REST + weights.ELITE);
+  const roll = rng.range(0, total);
+  let acc = weights.BATTLE;
+  if (roll <= acc) {
     return 'BATTLE';
   }
-  if (roll < 0.65) {
+  acc += weights.SHOP;
+  if (roll <= acc) {
     return 'SHOP';
   }
-  if (roll < 0.79) {
+  acc += weights.RECRUIT;
+  if (roll <= acc) {
     return 'RECRUIT';
   }
-  if (roll < 0.92) {
+  acc += weights.REST;
+  if (roll <= acc) {
     return 'REST';
   }
   return 'ELITE';
@@ -50,7 +66,8 @@ function connectLayers(rng: SeededRng, fromLayer: Node[], toLayer: Node[]): void
       }
     }
 
-    if (maxLinks > 1 && rng.chance(0.35)) {
+    const linkExtraChance = contentManager.getNodeTuning().mapGeneration.linkExtraChance;
+    if (maxLinks > 1 && rng.chance(linkExtraChance)) {
       const randomNode = sorted[rng.int(0, maxLinks - 1)];
       if (!from.edges.includes(randomNode.id)) {
         from.edges.push(randomNode.id);
@@ -91,9 +108,11 @@ function connectLayers(rng: SeededRng, fromLayer: Node[], toLayer: Node[]): void
 
 export function generateMap(seed: number): MapState {
   const rng = new SeededRng(seed);
+  const tuning = contentManager.getNodeTuning();
+  const mapTuning = tuning.mapGeneration;
 
-  const targetNodes = rng.int(18, 24);
-  const layerCount = rng.int(5, 6);
+  const targetNodes = rng.int(mapTuning.minNodes, mapTuning.maxNodes);
+  const layerCount = rng.int(mapTuning.layerCountMin, mapTuning.layerCountMax);
   const middleLayers = layerCount - 2;
 
   const layerSizes: number[] = [1];
@@ -101,17 +120,20 @@ export function generateMap(seed: number): MapState {
 
   for (let layerIndex = 0; layerIndex < middleLayers; layerIndex += 1) {
     const layersRemaining = middleLayers - layerIndex - 1;
-    const minForFuture = layersRemaining * 3;
-    const maxForCurrent = Math.max(3, Math.min(6, remaining - minForFuture));
-    const desired = rng.int(3, 5);
-    const value = Math.min(maxForCurrent, Math.max(3, desired));
+    const minForFuture = layersRemaining * mapTuning.middleLayerMin;
+    const maxForCurrent = Math.max(
+      mapTuning.middleLayerMin,
+      Math.min(mapTuning.middleLayerCap, remaining - minForFuture),
+    );
+    const desired = rng.int(mapTuning.middleLayerMin, mapTuning.middleLayerMax);
+    const value = Math.min(maxForCurrent, Math.max(mapTuning.middleLayerMin, desired));
     layerSizes.push(value);
     remaining -= value;
   }
 
   let pointer = 1;
   while (remaining > 0 && pointer < layerSizes.length) {
-    if (layerSizes[pointer] < 6) {
+    if (layerSizes[pointer] < mapTuning.middleLayerCap) {
       layerSizes[pointer] += 1;
       remaining -= 1;
     }
@@ -135,13 +157,13 @@ export function generateMap(seed: number): MapState {
 
     for (let i = 0; i < count; i += 1) {
       const yBase = count === 1 ? MAP_HEIGHT * 0.5 : MAP_PADDING_Y + (i / (count - 1)) * rowSpan;
-      const jitter = count === 1 ? 0 : rng.range(-18, 18);
+      const jitter = count === 1 ? 0 : rng.range(-mapTuning.nodeJitterY, mapTuning.nodeJitterY);
       const type =
         layerIndex === 0
           ? 'REST'
           : layerIndex === layerSizes.length - 1
             ? 'BOSS'
-            : pickNodeType(rng);
+            : pickNodeType(rng, layerIndex - 1);
 
       nodes.push({
         id: `node_${nodeCounter}`,

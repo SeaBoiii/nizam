@@ -1,0 +1,149 @@
+{
+  "contentVersion": "1.0.0",
+  "objectivePowerScale": {
+    "CAPTURE": 1.0,
+    "ASSASSINATE": 1.0,
+    "HOLDOUT": 0.72,
+    "ESCORT": 0.9
+  },
+  "templatesByNodeType": {
+    "BATTLE": [
+      {
+        "depthMin": 0,
+        "depthMax": 5,
+        "templates": [
+          {
+            "id": "battle_early_a",
+            "squads": [
+              { "archetypeId": "infantry", "tier": 1, "size": 24 },
+              { "archetypeId": "spearmen", "tier": 1, "size": 22 },
+              { "archetypeId": "archers", "tier": 1, "size": 20 }
+            ]
+          },
+          {
+            "id": "battle_early_b",
+            "squads": [
+              { "archetypeId": "infantry", "tier": 1, "size": 26 },
+              { "archetypeId": "cavalry", "tier": 1, "size": 18 },
+              { "archetypeId": "archers", "tier": 1, "size": 20 }
+            ]
+          }
+        ]
+      },
+      {
+        "depthMin": 6,
+        "depthMax": 10,
+        "templates": [
+          {
+            "id": "battle_mid_a",
+            "squads": [
+              { "archetypeId": "infantry", "tier": 2, "size": 26 },
+              { "archetypeId": "spearmen", "tier": 2, "size": 24 },
+              { "archetypeId": "archers", "tier": 1, "size": 22 }
+            ]
+          },
+          {
+            "id": "battle_mid_b",
+            "squads": [
+              { "archetypeId": "infantry", "tier": 2, "size": 24 },
+              { "archetypeId": "cavalry", "tier": 2, "size": 20 },
+              { "archetypeId": "archers", "tier": 2, "size": 22 }
+            ]
+          }
+        ]
+      },
+      {
+        "depthMin": 11,
+        "depthMax": 99,
+        "templates": [
+          {
+            "id": "battle_late_a",
+            "squads": [
+              { "archetypeId": "infantry", "tier": 2, "size": 28 },
+              { "archetypeId": "spearmen", "tier": 3, "size": 24 },
+              { "archetypeId": "archers", "tier": 2, "size": 24 }
+            ]
+          },
+          {
+            "id": "battle_late_b",
+            "squads": [
+              { "archetypeId": "infantry", "tier": 3, "size": 26 },
+              { "archetypeId": "cavalry", "tier": 3, "size": 20 },
+              { "archetypeId": "archers", "tier": 2, "size": 24 }
+            ]
+          }
+        ]
+      }
+    ],
+    "ELITE": [
+      {
+        "depthMin": 0,
+        "depthMax": 6,
+        "templates": [
+          {
+            "id": "elite_early_a",
+            "squads": [
+              { "archetypeId": "infantry", "tier": 2, "size": 28 },
+              { "archetypeId": "cavalry", "tier": 2, "size": 22 },
+              { "archetypeId": "archers", "tier": 2, "size": 20 }
+            ]
+          },
+          {
+            "id": "elite_early_b",
+            "squads": [
+              { "archetypeId": "spearmen", "tier": 2, "size": 28 },
+              { "archetypeId": "infantry", "tier": 2, "size": 28 },
+              { "archetypeId": "archers", "tier": 2, "size": 20 }
+            ]
+          }
+        ]
+      },
+      {
+        "depthMin": 7,
+        "depthMax": 99,
+        "templates": [
+          {
+            "id": "elite_late_a",
+            "squads": [
+              { "archetypeId": "infantry", "tier": 3, "size": 30 },
+              { "archetypeId": "cavalry", "tier": 3, "size": 24 },
+              { "archetypeId": "archers", "tier": 2, "size": 22 }
+            ]
+          },
+          {
+            "id": "elite_late_b",
+            "squads": [
+              { "archetypeId": "spearmen", "tier": 3, "size": 30 },
+              { "archetypeId": "infantry", "tier": 3, "size": 28 },
+              { "archetypeId": "archers", "tier": 3, "size": 22 }
+            ]
+          }
+        ]
+      }
+    ],
+    "BOSS": [
+      {
+        "depthMin": 0,
+        "depthMax": 99,
+        "templates": [
+          {
+            "id": "boss_a",
+            "squads": [
+              { "archetypeId": "infantry", "tier": 3, "size": 38 },
+              { "archetypeId": "cavalry", "tier": 3, "size": 28 },
+              { "archetypeId": "spearmen", "tier": 3, "size": 34 }
+            ]
+          },
+          {
+            "id": "boss_b",
+            "squads": [
+              { "archetypeId": "infantry", "tier": 3, "size": 36 },
+              { "archetypeId": "archers", "tier": 3, "size": 30 },
+              { "archetypeId": "cavalry", "tier": 3, "size": 26 }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

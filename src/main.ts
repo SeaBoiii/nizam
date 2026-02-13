@@ -1,4 +1,5 @@
 import { Application } from 'pixi.js';
+import { contentManager } from './content/ContentManager';
 import { Game } from './game/Game';
 import './styles.css';
 
@@ -16,6 +17,7 @@ async function bootstrap(): Promise<void> {
   }
 
   mount.appendChild(app.canvas);
+  await contentManager.loadAll();
   new Game(app);
 }
 

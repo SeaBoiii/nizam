@@ -4,15 +4,6 @@ import { clamp } from '../../utils/math';
 import { SeededRng } from '../../utils/rng';
 import { Vec2 } from '../../utils/vec2';
 import { TeamId } from '../types';
-import {
-  HOLDOUT_MAX_WAVES,
-  HOLDOUT_WAVE_BASE_SIZE,
-  HOLDOUT_WAVE_INTERVAL_SECONDS,
-  HOLDOUT_WAVE_MAX_SQUADS,
-  HOLDOUT_WAVE_MIN_SQUADS,
-  HOLDOUT_WAVE_SIZE_PER_DIFFICULTY,
-  HOLDOUT_WAVE_SIZE_PER_WAVE,
-} from '../rules/ObjectiveTuning';
 import type {
   IObjective,
   ObjectiveHUDState,
@@ -22,9 +13,6 @@ import type {
 } from './IObjective';
 import { objectiveDisplayName } from './ObjectiveTypes';
 
-const HOLDOUT_ZONE_RADIUS = 180;
-const WAVE_ARCHETYPES = ['infantry', 'spearmen', 'cavalry', 'archers'] as const;
-
 interface HoldoutOptions {
   id: string;
   center: Vec2;
@@ -32,6 +20,14 @@ interface HoldoutOptions {
   durationSeconds?: number;
   waveInterval?: number;
   maxWaves?: number;
+  zoneRadius?: number;
+  waveMinSquads?: number;
+  waveMaxSquads?: number;
+  waveBaseSize?: number;
+  waveRandomSizeMaxAdd?: number;
+  waveSizePerDifficulty?: number;
+  waveSizePerWave?: number;
+  waveArchetypes?: string[];
 }
 
 export class HoldoutObjective implements IObjective {
@@ -43,6 +39,14 @@ export class HoldoutObjective implements IObjective {
   private readonly durationSeconds: number;
   private readonly waveInterval: number;
   private readonly maxWaves: number;
+  private readonly zoneRadius: number;
+  private readonly waveMinSquads: number;
+  private readonly waveMaxSquads: number;
+  private readonly waveBaseSize: number;
+  private readonly waveRandomSizeMaxAdd: number;
+  private readonly waveSizePerDifficulty: number;
+  private readonly waveSizePerWave: number;
+  private readonly waveArchetypes: string[];
 
   private timeRemaining = 0;
   private elapsed = 0;
@@ -62,13 +66,21 @@ export class HoldoutObjective implements IObjective {
     this.center = options.center.clone();
     this.rng = new SeededRng(options.seed);
     this.durationSeconds = Math.max(30, options.durationSeconds ?? 120);
-    this.waveInterval = Math.max(8, options.waveInterval ?? HOLDOUT_WAVE_INTERVAL_SECONDS);
-    this.maxWaves = Math.max(1, options.maxWaves ?? HOLDOUT_MAX_WAVES);
+    this.waveInterval = Math.max(8, options.waveInterval ?? 25);
+    this.maxWaves = Math.max(1, options.maxWaves ?? 4);
+    this.zoneRadius = Math.max(80, options.zoneRadius ?? 180);
+    this.waveMinSquads = Math.max(1, options.waveMinSquads ?? 1);
+    this.waveMaxSquads = Math.max(this.waveMinSquads, options.waveMaxSquads ?? 2);
+    this.waveBaseSize = Math.max(8, options.waveBaseSize ?? 17);
+    this.waveRandomSizeMaxAdd = Math.max(0, options.waveRandomSizeMaxAdd ?? 4);
+    this.waveSizePerDifficulty = Math.max(0, options.waveSizePerDifficulty ?? 2);
+    this.waveSizePerWave = Math.max(0, options.waveSizePerWave ?? 1);
+    this.waveArchetypes = options.waveArchetypes && options.waveArchetypes.length > 0 ? [...options.waveArchetypes] : ['infantry'];
 
     this.tacticalState = {
       type: this.type,
       focusPosition: this.center,
-      captureRadius: HOLDOUT_ZONE_RADIUS,
+      captureRadius: this.zoneRadius,
       blueCommander: null,
       redCommander: null,
       caravan: null,
@@ -142,7 +154,7 @@ export class HoldoutObjective implements IObjective {
     out.push({
       x: this.center.x,
       y: this.center.y,
-      radius: HOLDOUT_ZONE_RADIUS,
+      radius: this.zoneRadius,
       color: 0xf0d28a,
     });
   }
@@ -150,14 +162,14 @@ export class HoldoutObjective implements IObjective {
   renderOverlay(gfx: Graphics, camera: Camera): void {
     void camera;
     gfx.clear();
-    gfx.circle(this.center.x, this.center.y, HOLDOUT_ZONE_RADIUS);
+    gfx.circle(this.center.x, this.center.y, this.zoneRadius);
     gfx.stroke({ color: 0xf3d38f, alpha: 0.72, width: 1.6 });
-    gfx.circle(this.center.x, this.center.y, HOLDOUT_ZONE_RADIUS * 0.55);
+    gfx.circle(this.center.x, this.center.y, this.zoneRadius * 0.55);
     gfx.stroke({ color: 0xf3d38f, alpha: 0.45, width: 1 });
   }
 
   private spawnWave(world: ObjectiveWorld): void {
-    const squadsToSpawn = this.rng.int(HOLDOUT_WAVE_MIN_SQUADS, HOLDOUT_WAVE_MAX_SQUADS);
+    const squadsToSpawn = this.rng.int(this.waveMinSquads, this.waveMaxSquads);
     const difficulty = Math.max(1, world.scenario.difficultyTier);
     const tierCap = Math.max(1, Math.min(3, difficulty));
 
@@ -177,13 +189,13 @@ export class HoldoutObjective implements IObjective {
         facing = -Math.PI * 0.5;
       }
 
-      const archetypeId = WAVE_ARCHETYPES[this.rng.int(0, WAVE_ARCHETYPES.length - 1)];
+      const archetypeId = this.waveArchetypes[this.rng.int(0, this.waveArchetypes.length - 1)];
       const tier = this.rng.int(Math.max(1, tierCap - 1), Math.min(3, tierCap + 1));
       const size =
-        HOLDOUT_WAVE_BASE_SIZE +
-        this.rng.int(0, 4) +
-        (difficulty - 1) * HOLDOUT_WAVE_SIZE_PER_DIFFICULTY +
-        this.wavesSpawned * HOLDOUT_WAVE_SIZE_PER_WAVE;
+        this.waveBaseSize +
+        this.rng.int(0, this.waveRandomSizeMaxAdd) +
+        (difficulty - 1) * this.waveSizePerDifficulty +
+        this.wavesSpawned * this.waveSizePerWave;
 
       const squad = world.spawnSquad({
         team: TeamId.Red,

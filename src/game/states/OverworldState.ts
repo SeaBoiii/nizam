@@ -6,6 +6,7 @@ import { createScenario, objectivePreviewLabel } from '../../meta/ScenarioFactor
 import { TextButton } from '../../ui/widgets/TextButton';
 import { archetypeChoices, archetypeDisplayName } from '../../meta/Progression';
 import { createSquadMeta } from '../../meta/Army';
+import { contentManager } from '../../content/ContentManager';
 import { SeededRng } from '../../utils/rng';
 
 const MAP_OFFSET_X = 120;
@@ -36,13 +37,15 @@ function isBattleNode(type: NodeType): boolean {
 }
 
 function nodeRewardHint(type: NodeType): string {
+  const rewards = contentManager.getNodeTuning().rewardsByNodeType[type];
+  const rewardText = `Gold ${rewards.gold.min}-${rewards.gold.max}, Recruits ${rewards.recruits.min}-${rewards.recruits.max}`;
   switch (type) {
     case 'BATTLE':
-      return 'Skirmish: medium rewards';
+      return `Skirmish rewards: ${rewardText}`;
     case 'ELITE':
-      return 'Elite battle: high risk/high reward';
+      return `Elite rewards: ${rewardText}`;
     case 'BOSS':
-      return 'Boss battle: hardest fight';
+      return `Boss rewards: ${rewardText}`;
     case 'SHOP':
       return 'Spend gold on army improvements';
     case 'RECRUIT':
@@ -265,41 +268,46 @@ export class OverworldState implements IGameState {
     if (campaign === null) {
       return;
     }
+    const tuning = contentManager.getNodeTuning();
+    const shop = tuning.shop;
 
     this.preparePanel('Shop', 'Spend gold to improve your warband.');
 
-    const buySizeButton = this.addPanelButton('Buy +5 squad size (35g)', () => {
-      if (campaign.armyState.gold < 35) {
-        this.panelBody.text = 'Not enough gold for squad expansion.';
-        return;
-      }
-
-      let targetIndex = 0;
-      for (let i = 1; i < campaign.armyState.squads.length; i += 1) {
-        if (campaign.armyState.squads[i].size < campaign.armyState.squads[targetIndex].size) {
-          targetIndex = i;
+    const buySizeButton = this.addPanelButton(
+      `Buy +${shop.sizeUpgradeAmount} squad size (${shop.sizeUpgradeCost}g)`,
+      () => {
+        if (campaign.armyState.gold < shop.sizeUpgradeCost) {
+          this.panelBody.text = 'Not enough gold for squad expansion.';
+          return;
         }
-      }
 
-      campaign.armyState.gold -= 35;
-      campaign.armyState.squads[targetIndex].size += 5;
-      this.panelBody.text = 'Purchased squad expansion.';
-      this.refreshText(campaign.mapState);
-    });
-    buySizeButton.setEnabled(campaign.armyState.gold >= 35);
+        let targetIndex = 0;
+        for (let i = 1; i < campaign.armyState.squads.length; i += 1) {
+          if (campaign.armyState.squads[i].size < campaign.armyState.squads[targetIndex].size) {
+            targetIndex = i;
+          }
+        }
 
-    const buySuppliesButton = this.addPanelButton('Buy supplies +20 (22g)', () => {
-      if (campaign.armyState.gold < 22) {
+        campaign.armyState.gold -= shop.sizeUpgradeCost;
+        campaign.armyState.squads[targetIndex].size += shop.sizeUpgradeAmount;
+        this.panelBody.text = 'Purchased squad expansion.';
+        this.refreshText(campaign.mapState);
+      },
+    );
+    buySizeButton.setEnabled(campaign.armyState.gold >= shop.sizeUpgradeCost);
+
+    const buySuppliesButton = this.addPanelButton(`Buy supplies +${shop.suppliesAmount} (${shop.suppliesCost}g)`, () => {
+      if (campaign.armyState.gold < shop.suppliesCost) {
         this.panelBody.text = 'Not enough gold for supplies.';
         return;
       }
 
-      campaign.armyState.gold -= 22;
-      campaign.armyState.supplies += 20;
+      campaign.armyState.gold -= shop.suppliesCost;
+      campaign.armyState.supplies += shop.suppliesAmount;
       this.panelBody.text = 'Purchased supplies.';
       this.refreshText(campaign.mapState);
     });
-    buySuppliesButton.setEnabled(campaign.armyState.gold >= 22);
+    buySuppliesButton.setEnabled(campaign.armyState.gold >= shop.suppliesCost);
 
     this.addPanelButton('Leave Shop', () => this.closeNodePanel());
   }
@@ -309,23 +317,26 @@ export class OverworldState implements IGameState {
     if (campaign === null) {
       return;
     }
+    const recruitTuning = contentManager.getNodeTuning().recruit;
 
-    const recruitsGain = 9 + Math.min(6, campaign.runState.difficultyTier * 2);
+    const recruitsGain =
+      recruitTuning.baseRecruits +
+      Math.min(recruitTuning.recruitsBonusCap, campaign.runState.difficultyTier * recruitTuning.recruitsPerDifficulty);
     campaign.armyState.recruits += recruitsGain;
 
     this.preparePanel('Recruit Camp', `Recruits gained: +${recruitsGain}`);
 
-    const discountButton = this.addPanelButton('Hire new squad (15g)', () => {
-      if (campaign.armyState.gold < 15) {
+    const discountButton = this.addPanelButton(`Hire new squad (${recruitTuning.discountHireCost}g)`, () => {
+      if (campaign.armyState.gold < recruitTuning.discountHireCost) {
         this.panelBody.text = `Recruits gained: +${recruitsGain}\nNeed more gold.`;
         return;
       }
 
       const rng = new SeededRng((campaign.runState.seed ^ campaign.runState.step * 73856093) >>> 0);
       const archetypeId = rng.pick(archetypeChoices());
-      const size = rng.int(18, 22);
+      const size = rng.int(recruitTuning.discountSizeMin, recruitTuning.discountSizeMax);
 
-      campaign.armyState.gold -= 15;
+      campaign.armyState.gold -= recruitTuning.discountHireCost;
       campaign.armyState.squads.push(
         createSquadMeta(campaign.armyState, archetypeId, size, 1, `${archetypeDisplayName(archetypeId)} Scouts`),
       );
@@ -334,7 +345,7 @@ export class OverworldState implements IGameState {
       this.refreshText(campaign.mapState);
       discountButton.setEnabled(false);
     });
-    discountButton.setEnabled(campaign.armyState.gold >= 15);
+    discountButton.setEnabled(campaign.armyState.gold >= recruitTuning.discountHireCost);
 
     this.addPanelButton('Continue', () => this.closeNodePanel());
     this.refreshText(campaign.mapState);
@@ -345,11 +356,12 @@ export class OverworldState implements IGameState {
     if (campaign === null) {
       return;
     }
+    const restTuning = contentManager.getNodeTuning().rest;
 
-    campaign.armyState.supplies += 12;
-    campaign.runState.restBonusBattles = 1;
+    campaign.armyState.supplies += restTuning.suppliesGain;
+    campaign.runState.restBonusBattles = restTuning.restBonusBattles;
 
-    this.preparePanel('Rest Stop', 'Supplies +12\nNext battle: +8% unit HP bonus.');
+    this.preparePanel('Rest Stop', `Supplies +${restTuning.suppliesGain}\nNext battle: +8% unit HP bonus.`);
     this.addPanelButton('Continue', () => this.closeNodePanel());
     this.refreshText(campaign.mapState);
   }

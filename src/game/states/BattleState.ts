@@ -22,6 +22,7 @@ export class BattleState implements IGameState {
       this.context.transitionTo('OVERWORLD');
       return;
     }
+    this.context.setPendingScenario(scenario);
 
     this.context.stage.addChild(this.root);
 

@@ -65,6 +65,24 @@ REPO_NAME=your-repo-name npm run build
 
 On GitHub Actions, `REPO_NAME` is set automatically from `${{ github.event.repository.name }}`.
 
+## Data-driven content (Sprint 5.1)
+
+Gameplay tuning is loaded from JSON files at startup:
+
+- `public/content/units.json`
+- `public/content/upgrades.json`
+- `public/content/objectives.json`
+- `public/content/nodes.json`
+- `public/content/scenarios.json`
+
+The loader uses Vite base-aware paths:
+
+- `${import.meta.env.BASE_URL}content/*.json`
+
+So GitHub Pages pathing under `/nizam/` works correctly.
+
+If a content file is missing or invalid, the game falls back to built-in defaults and logs errors to console. In dev mode, a small HUD warning is shown when fallback is active.
+
 ## Campaign loop
 
 - `TITLE -> OVERWORLD -> BATTLE -> REWARDS -> OVERWORLD`
@@ -74,6 +92,7 @@ On GitHub Actions, `REPO_NAME` is set automatically from `${{ github.event.repos
 - Hovering battle nodes shows the upcoming objective type.
 - Rewards are granted after battle and one bonus choice is required.
 - Save data is persisted in localStorage (`nizam_save_v1`) and used by **Continue**.
+- Saves now include `saveVersion` and `contentVersion`, and older v1 saves are migrated automatically.
 
 ## Controls
 
@@ -92,6 +111,7 @@ On GitHub Actions, `REPO_NAME` is set automatically from `${{ github.event.repos
 - Battle retreat to map edge: `R`
 - Battle volley (ranged stance): `V`
 - Battle skirmish (kite while shooting): `K`
+- Debug panel toggle (all states): `F1` or `` ` ``
 
 ## Battle objectives (Sprint 4)
 
@@ -101,6 +121,17 @@ On GitHub Actions, `REPO_NAME` is set automatically from `${{ github.event.repos
 - `Caravan Run` (`ESCORT`): protect the caravan to the exit zone.
 - Overworld battle nodes now preview objective type in the tooltip.
 - Objective variants are selected deterministically from run seed + node id.
+
+## Debug panel
+
+Use `F1` or `` ` `` to toggle.
+
+- Shows content load status (`OK` or fallback), current run seed, and content version.
+- `Reload Content` re-fetches all JSON content files.
+- `Restart Current Battle` appears during battle.
+- `Restart Run` appears outside battle.
+
+After content reload, restart battle/run to apply changes to newly spawned units/scenarios.
 
 ## Ranged combat (Sprint 2)
 
@@ -143,6 +174,7 @@ On GitHub Actions, `REPO_NAME` is set automatically from `${{ github.event.repos
 - Squad banners + morale bars for battlefield readability
 - Waypoint path rendering for selected squads
 - Enemy AI Director issuing tactical HOLD/CHARGE/VOLLEY/SKIRMISH orders by role/objective
+- Data-driven tuning/content pipeline with JSON validation + runtime fallback defaults
 
 ## Troubleshooting blank page on Pages
 

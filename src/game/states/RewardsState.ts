@@ -3,7 +3,13 @@ import type { IGameState } from './IGameState';
 import type { StateContext } from './StateContext';
 import type { BattleResult } from '../../meta/types';
 import { TextButton } from '../../ui/widgets/TextButton';
-import { archetypeChoices, archetypeDisplayName, canUpgradeSquad, upgradeSquadTier } from '../../meta/Progression';
+import {
+  archetypeChoices,
+  archetypeDisplayName,
+  canUpgradeSquad,
+  upgradeCostForSquad,
+  upgradeSquadTier,
+} from '../../meta/Progression';
 import { createSquadMeta } from '../../meta/Army';
 import { SeededRng } from '../../utils/rng';
 import { objectiveDisplayName } from '../../sim/objectives/ObjectiveTypes';
@@ -152,14 +158,20 @@ export class RewardsState implements IGameState {
 
     let bestIndex = -1;
     let bestTier = Number.POSITIVE_INFINITY;
+    let bestCost = Number.POSITIVE_INFINITY;
     for (let i = 0; i < campaign.armyState.squads.length; i += 1) {
       const squad = campaign.armyState.squads[i];
       if (!canUpgradeSquad(squad)) {
         continue;
       }
+      const cost = upgradeCostForSquad(squad);
+      if (campaign.armyState.gold < cost) {
+        continue;
+      }
 
-      if (squad.tier < bestTier) {
+      if (squad.tier < bestTier || (squad.tier === bestTier && cost < bestCost)) {
         bestTier = squad.tier;
+        bestCost = cost;
         bestIndex = i;
       }
     }
@@ -168,9 +180,11 @@ export class RewardsState implements IGameState {
       return;
     }
 
+    const upgradeCost = upgradeCostForSquad(campaign.armyState.squads[bestIndex]);
+    campaign.armyState.gold = Math.max(0, campaign.armyState.gold - upgradeCost);
     upgradeSquadTier(campaign.armyState.squads[bestIndex]);
     this.choiceTaken = true;
-    this.rewardInfo.text += `\nUpgraded ${campaign.armyState.squads[bestIndex].name ?? campaign.armyState.squads[bestIndex].id}.`;
+    this.rewardInfo.text += `\nUpgraded ${campaign.armyState.squads[bestIndex].name ?? campaign.armyState.squads[bestIndex].id}${upgradeCost > 0 ? ` (-${upgradeCost}g)` : ''}.`;
     this.refreshButtons();
   }
 
@@ -206,8 +220,27 @@ export class RewardsState implements IGameState {
   private refreshButtons(): void {
     const campaign = this.context.getCampaignData();
 
-    const hasUpgradeable =
-      campaign !== null && campaign.armyState.squads.some((squad) => canUpgradeSquad(squad));
+    let hasUpgradeable = false;
+    let lowestCost = Number.POSITIVE_INFINITY;
+    if (campaign !== null) {
+      for (let i = 0; i < campaign.armyState.squads.length; i += 1) {
+        const squad = campaign.armyState.squads[i];
+        if (!canUpgradeSquad(squad)) {
+          continue;
+        }
+        const cost = upgradeCostForSquad(squad);
+        lowestCost = Math.min(lowestCost, cost);
+        if (campaign.armyState.gold >= cost) {
+          hasUpgradeable = true;
+        }
+      }
+    }
+
+    if (Number.isFinite(lowestCost)) {
+      this.upgradeButton.setLabel(lowestCost > 0 ? `Upgrade Squad (${lowestCost}g+)` : 'Upgrade Squad');
+    } else {
+      this.upgradeButton.setLabel('Upgrade Squad');
+    }
 
     this.upgradeButton.setEnabled(!this.choiceTaken && hasUpgradeable);
     this.recruitButton.setEnabled(!this.choiceTaken);

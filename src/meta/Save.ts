@@ -1,11 +1,20 @@
-import type { ArmyState } from './Army';
-import type { MapState, RunState } from '../overworld/types';
+import { contentManager } from '../content/ContentManager';
+import type { ArmyState, SquadMeta } from './Army';
+import type { MapState, Node, RunState } from '../overworld/types';
 
 const SAVE_KEY = 'nizam_save_v1';
-const SAVE_VERSION = 1;
+const SAVE_VERSION = 2;
+
+interface LegacySaveV1 {
+  version: number;
+  runState: Partial<RunState> & Record<string, unknown>;
+  armyState: Partial<ArmyState> & Record<string, unknown>;
+  mapState: Partial<MapState> & Record<string, unknown>;
+}
 
 export interface SaveGameData {
-  version: number;
+  saveVersion: number;
+  contentVersion: string;
   runState: RunState;
   armyState: ArmyState;
   mapState: MapState;
@@ -15,88 +24,219 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function isValidRunState(value: unknown): value is RunState {
+function asNumber(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  return fallback;
+}
+
+function asString(value: unknown, fallback: string): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function asStringArray(value: unknown, fallback: string[]): string[] {
+  if (!Array.isArray(value)) {
+    return fallback;
+  }
+  const result: string[] = [];
+  for (let i = 0; i < value.length; i += 1) {
+    if (typeof value[i] === 'string') {
+      result.push(value[i]);
+    }
+  }
+  return result.length > 0 ? result : fallback;
+}
+
+function sanitizeRunState(value: unknown): RunState | null {
   if (!isObject(value)) {
-    return false;
+    return null;
   }
 
-  return (
-    typeof value.seed === 'number' &&
-    typeof value.currentNodeId === 'string' &&
-    Array.isArray(value.clearedNodeIds) &&
-    typeof value.step === 'number' &&
-    typeof value.difficultyTier === 'number' &&
-    typeof value.restBonusBattles === 'number'
-  );
+  const seed = asNumber(value.seed, Date.now() >>> 0);
+  const currentNodeId = asString(value.currentNodeId, 'node_0');
+  const clearedNodeIds = asStringArray(value.clearedNodeIds, [currentNodeId]);
+
+  return {
+    seed: seed >>> 0,
+    currentNodeId,
+    clearedNodeIds,
+    step: Math.max(0, Math.floor(asNumber(value.step, 0))),
+    difficultyTier: Math.max(1, Math.floor(asNumber(value.difficultyTier, 1))),
+    restBonusBattles: Math.max(0, Math.floor(asNumber(value.restBonusBattles, 0))),
+  };
 }
 
-function isValidArmyState(value: unknown): value is ArmyState {
-  if (!isObject(value) || !Array.isArray(value.squads)) {
-    return false;
+function sanitizeNode(value: unknown): Node | null {
+  if (!isObject(value) || !Array.isArray(value.edges)) {
+    return null;
   }
 
-  if (
-    typeof value.gold !== 'number' ||
-    typeof value.supplies !== 'number' ||
-    typeof value.recruits !== 'number' ||
-    typeof value.nextSquadId !== 'number'
-  ) {
-    return false;
-  }
-
-  for (let i = 0; i < value.squads.length; i += 1) {
-    const squad = value.squads[i];
-    if (!isObject(squad)) {
-      return false;
-    }
-    if (
-      typeof squad.id !== 'string' ||
-      typeof squad.archetypeId !== 'string' ||
-      typeof squad.size !== 'number' ||
-      typeof squad.tier !== 'number'
-    ) {
-      return false;
+  const edges: string[] = [];
+  for (let i = 0; i < value.edges.length; i += 1) {
+    if (typeof value.edges[i] === 'string') {
+      edges.push(value.edges[i]);
     }
   }
 
-  return true;
+  const nodeTypeValue = asString(value.type, 'BATTLE');
+  const nodeType: Node['type'] =
+    nodeTypeValue === 'SHOP' ||
+    nodeTypeValue === 'RECRUIT' ||
+    nodeTypeValue === 'REST' ||
+    nodeTypeValue === 'ELITE' ||
+    nodeTypeValue === 'BOSS'
+      ? nodeTypeValue
+      : 'BATTLE';
+
+  return {
+    id: asString(value.id, ''),
+    type: nodeType,
+    x: asNumber(value.x, 0),
+    y: asNumber(value.y, 0),
+    edges,
+    cleared: Boolean(value.cleared),
+  };
 }
 
-function isValidMapState(value: unknown): value is MapState {
+function sanitizeMapState(value: unknown): MapState | null {
   if (!isObject(value) || !Array.isArray(value.nodes)) {
-    return false;
+    return null;
   }
 
-  if (typeof value.startNodeId !== 'string' || typeof value.bossNodeId !== 'string') {
-    return false;
-  }
-
+  const nodes: Node[] = [];
   for (let i = 0; i < value.nodes.length; i += 1) {
-    const node = value.nodes[i];
-    if (!isObject(node) || !Array.isArray(node.edges)) {
-      return false;
-    }
-    if (
-      typeof node.id !== 'string' ||
-      typeof node.type !== 'string' ||
-      typeof node.x !== 'number' ||
-      typeof node.y !== 'number' ||
-      typeof node.cleared !== 'boolean'
-    ) {
-      return false;
+    const node = sanitizeNode(value.nodes[i]);
+    if (node !== null && node.id.length > 0) {
+      nodes.push(node);
     }
   }
 
-  return true;
+  if (nodes.length === 0) {
+    return null;
+  }
+
+  const startNodeId = asString(value.startNodeId, nodes[0].id);
+  const bossNodeId = asString(value.bossNodeId, nodes[nodes.length - 1].id);
+
+  return {
+    nodes,
+    startNodeId,
+    bossNodeId,
+  };
 }
 
-export function saveGame(data: Omit<SaveGameData, 'version'>): void {
+function sanitizeSquad(value: unknown, fallbackArchetypeId: string): SquadMeta | null {
+  if (!isObject(value)) {
+    return null;
+  }
+  const id = asString(value.id, '');
+  if (id.length === 0) {
+    return null;
+  }
+
+  const requestedArchetypeId = asString(value.archetypeId, fallbackArchetypeId);
+  const archetypeId = contentManager.hasUnitArchetype(requestedArchetypeId) ? requestedArchetypeId : fallbackArchetypeId;
+  if (archetypeId !== requestedArchetypeId) {
+    console.warn(`[Save] Missing archetype '${requestedArchetypeId}' in content. Replaced with '${archetypeId}'.`);
+  }
+
+  return {
+    id,
+    archetypeId,
+    size: Math.max(1, Math.floor(asNumber(value.size, 20))),
+    tier: Math.max(1, Math.floor(asNumber(value.tier, 1))),
+    name: typeof value.name === 'string' ? value.name : undefined,
+    perks: Array.isArray(value.perks) ? value.perks.filter((entry) => typeof entry === 'string') : undefined,
+  };
+}
+
+function sanitizeArmyState(value: unknown): ArmyState | null {
+  if (!isObject(value) || !Array.isArray(value.squads)) {
+    return null;
+  }
+  const fallbackArchetypeId = contentManager.getFallbackArchetypeId();
+
+  const squads: SquadMeta[] = [];
+  for (let i = 0; i < value.squads.length; i += 1) {
+    const squad = sanitizeSquad(value.squads[i], fallbackArchetypeId);
+    if (squad !== null) {
+      squads.push(squad);
+    }
+  }
+  if (squads.length === 0) {
+    squads.push({
+      id: 'squad_1',
+      archetypeId: fallbackArchetypeId,
+      size: 20,
+      tier: 1,
+    });
+  }
+
+  const nextSquadId = Math.max(
+    Math.floor(asNumber(value.nextSquadId, squads.length + 1)),
+    squads.length + 1,
+  );
+
+  return {
+    squads,
+    gold: Math.max(0, Math.floor(asNumber(value.gold, 0))),
+    supplies: Math.max(0, Math.floor(asNumber(value.supplies, 0))),
+    recruits: Math.max(0, Math.floor(asNumber(value.recruits, 0))),
+    nextSquadId,
+  };
+}
+
+function normalizeSaveShape(raw: unknown): SaveGameData | null {
+  if (!isObject(raw)) {
+    return null;
+  }
+
+  if (raw.saveVersion === SAVE_VERSION) {
+    const runState = sanitizeRunState(raw.runState);
+    const armyState = sanitizeArmyState(raw.armyState);
+    const mapState = sanitizeMapState(raw.mapState);
+    if (runState === null || armyState === null || mapState === null) {
+      return null;
+    }
+    return {
+      saveVersion: SAVE_VERSION,
+      contentVersion: asString(raw.contentVersion, contentManager.getStatus().contentVersion),
+      runState,
+      armyState,
+      mapState,
+    };
+  }
+
+  if (asNumber(raw.version, -1) === 1) {
+    const legacy = raw as unknown as LegacySaveV1;
+    const runState = sanitizeRunState(legacy.runState);
+    const armyState = sanitizeArmyState(legacy.armyState);
+    const mapState = sanitizeMapState(legacy.mapState);
+    if (runState === null || armyState === null || mapState === null) {
+      return null;
+    }
+    console.warn('[Save] Migrated legacy save v1 to v2.');
+    return {
+      saveVersion: SAVE_VERSION,
+      contentVersion: contentManager.getStatus().contentVersion,
+      runState,
+      armyState,
+      mapState,
+    };
+  }
+
+  return null;
+}
+
+export function saveGame(data: Omit<SaveGameData, 'saveVersion' | 'contentVersion'>): void {
   if (typeof window === 'undefined' || !window.localStorage) {
     return;
   }
 
   const payload: SaveGameData = {
-    version: SAVE_VERSION,
+    saveVersion: SAVE_VERSION,
+    contentVersion: contentManager.getStatus().contentVersion,
     runState: data.runState,
     armyState: data.armyState,
     mapState: data.mapState,
@@ -116,25 +256,8 @@ export function loadGame(): SaveGameData | null {
   }
 
   try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!isObject(parsed)) {
-      return null;
-    }
-
-    if (parsed.version !== SAVE_VERSION) {
-      return null;
-    }
-
-    if (!isValidRunState(parsed.runState) || !isValidArmyState(parsed.armyState) || !isValidMapState(parsed.mapState)) {
-      return null;
-    }
-
-    return {
-      version: SAVE_VERSION,
-      runState: parsed.runState,
-      armyState: parsed.armyState,
-      mapState: parsed.mapState,
-    };
+    const parsed = JSON.parse(raw) as unknown;
+    return normalizeSaveShape(parsed);
   } catch {
     return null;
   }

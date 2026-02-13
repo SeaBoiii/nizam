@@ -1,3 +1,5 @@
+import { contentManager } from '../content/ContentManager';
+
 export interface SquadMeta {
   id: string;
   archetypeId: string;
@@ -16,16 +18,19 @@ export interface ArmyState {
 }
 
 export function createStartingArmy(): ArmyState {
+  const starting = contentManager.getStartingArmy();
   return {
-    squads: [
-      { id: 'squad_1', archetypeId: 'infantry', size: 30, tier: 1, name: 'Vanguard' },
-      { id: 'squad_2', archetypeId: 'spearmen', size: 28, tier: 1, name: 'Pikes' },
-      { id: 'squad_3', archetypeId: 'archers', size: 24, tier: 1, name: 'Bowline' },
-    ],
-    gold: 55,
-    supplies: 35,
-    recruits: 12,
-    nextSquadId: 4,
+    squads: starting.squads.map((squad, index) => ({
+      id: `squad_${index + 1}`,
+      archetypeId: squad.archetypeId,
+      size: squad.size,
+      tier: squad.tier,
+      name: squad.name,
+    })),
+    gold: starting.gold,
+    supplies: starting.supplies,
+    recruits: starting.recruits,
+    nextSquadId: starting.squads.length + 1,
   };
 }
 

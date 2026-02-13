@@ -1,0 +1,252 @@
+{
+  "contentVersion": "1.0.0",
+  "fallbackArchetypeId": "infantry",
+  "units": [
+    {
+      "id": "infantry",
+      "name": "Infantry",
+      "recruitable": true,
+      "tags": ["infantry", "shield"],
+      "tiers": {
+        "1": {
+          "hp": 100,
+          "moveSpeed": 90,
+          "attackDamage": 10,
+          "attackRate": 1,
+          "meleeRange": 13,
+          "rangedDamage": 0,
+          "rangedRange": 0,
+          "projectileSpeed": 0,
+          "projectileGravity": 0,
+          "rangedCooldown": 0,
+          "accuracy": 1,
+          "armor": 4,
+          "mass": 1,
+          "chargePower": 1,
+          "chargeMinSpeed": 999
+        },
+        "2": {
+          "hp": 114,
+          "moveSpeed": 92.7,
+          "attackDamage": 11.2,
+          "attackRate": 1,
+          "meleeRange": 13,
+          "rangedDamage": 0,
+          "rangedRange": 0,
+          "projectileSpeed": 0,
+          "projectileGravity": 0,
+          "rangedCooldown": 0,
+          "accuracy": 1,
+          "armor": 4.48,
+          "mass": 1,
+          "chargePower": 1,
+          "chargeMinSpeed": 999
+        },
+        "3": {
+          "hp": 128,
+          "moveSpeed": 94.5,
+          "attackDamage": 12.2,
+          "attackRate": 1,
+          "meleeRange": 13,
+          "rangedDamage": 0,
+          "rangedRange": 0,
+          "projectileSpeed": 0,
+          "projectileGravity": 0,
+          "rangedCooldown": 0,
+          "accuracy": 1,
+          "armor": 4.96,
+          "mass": 1,
+          "chargePower": 1,
+          "chargeMinSpeed": 999
+        }
+      }
+    },
+    {
+      "id": "spearmen",
+      "name": "Spearmen",
+      "recruitable": true,
+      "tags": ["infantry", "spear"],
+      "tiers": {
+        "1": {
+          "hp": 95,
+          "moveSpeed": 85,
+          "attackDamage": 9,
+          "attackRate": 1,
+          "meleeRange": 14,
+          "rangedDamage": 0,
+          "rangedRange": 0,
+          "projectileSpeed": 0,
+          "projectileGravity": 0,
+          "rangedCooldown": 0,
+          "accuracy": 1,
+          "armor": 3,
+          "mass": 1,
+          "chargePower": 1,
+          "chargeMinSpeed": 999
+        },
+        "2": {
+          "hp": 108.3,
+          "moveSpeed": 87.55,
+          "attackDamage": 10.08,
+          "attackRate": 1,
+          "meleeRange": 14,
+          "rangedDamage": 0,
+          "rangedRange": 0,
+          "projectileSpeed": 0,
+          "projectileGravity": 0,
+          "rangedCooldown": 0,
+          "accuracy": 1,
+          "armor": 3.36,
+          "mass": 1,
+          "chargePower": 1,
+          "chargeMinSpeed": 999
+        },
+        "3": {
+          "hp": 121.6,
+          "moveSpeed": 89.25,
+          "attackDamage": 10.98,
+          "attackRate": 1,
+          "meleeRange": 14,
+          "rangedDamage": 0,
+          "rangedRange": 0,
+          "projectileSpeed": 0,
+          "projectileGravity": 0,
+          "rangedCooldown": 0,
+          "accuracy": 1,
+          "armor": 3.72,
+          "mass": 1,
+          "chargePower": 1,
+          "chargeMinSpeed": 999
+        }
+      }
+    },
+    {
+      "id": "cavalry",
+      "name": "Cavalry",
+      "recruitable": true,
+      "tags": ["cavalry", "heavy"],
+      "tiers": {
+        "1": {
+          "hp": 120,
+          "moveSpeed": 140,
+          "attackDamage": 11,
+          "attackRate": 0.9,
+          "meleeRange": 14,
+          "rangedDamage": 0,
+          "rangedRange": 0,
+          "projectileSpeed": 0,
+          "projectileGravity": 0,
+          "rangedCooldown": 0,
+          "accuracy": 1,
+          "armor": 5,
+          "mass": 1.4,
+          "chargePower": 2.2,
+          "chargeMinSpeed": 110
+        },
+        "2": {
+          "hp": 136.8,
+          "moveSpeed": 144.2,
+          "attackDamage": 12.32,
+          "attackRate": 0.9,
+          "meleeRange": 14,
+          "rangedDamage": 0,
+          "rangedRange": 0,
+          "projectileSpeed": 0,
+          "projectileGravity": 0,
+          "rangedCooldown": 0,
+          "accuracy": 1,
+          "armor": 5.6,
+          "mass": 1.4,
+          "chargePower": 2.2,
+          "chargeMinSpeed": 110
+        },
+        "3": {
+          "hp": 153.6,
+          "moveSpeed": 147,
+          "attackDamage": 13.42,
+          "attackRate": 0.9,
+          "meleeRange": 14,
+          "rangedDamage": 0,
+          "rangedRange": 0,
+          "projectileSpeed": 0,
+          "projectileGravity": 0,
+          "rangedCooldown": 0,
+          "accuracy": 1,
+          "armor": 6.2,
+          "mass": 1.4,
+          "chargePower": 2.2,
+          "chargeMinSpeed": 110
+        }
+      }
+    },
+    {
+      "id": "archers",
+      "name": "Archers",
+      "recruitable": true,
+      "tags": ["archer", "light"],
+      "tiers": {
+        "1": {
+          "hp": 75,
+          "moveSpeed": 95,
+          "attackDamage": 6,
+          "attackRate": 1.25,
+          "meleeRange": 12,
+          "rangedDamage": 7.2,
+          "rangedRange": 390,
+          "projectileSpeed": 340,
+          "projectileGravity": 150,
+          "rangedCooldown": 0,
+          "accuracy": 0.78,
+          "armor": 1,
+          "mass": 0.9,
+          "chargePower": 1,
+          "chargeMinSpeed": 999
+        },
+        "2": {
+          "hp": 85.5,
+          "moveSpeed": 97.85,
+          "attackDamage": 6.72,
+          "attackRate": 1.25,
+          "meleeRange": 12,
+          "rangedDamage": 7.99,
+          "rangedRange": 390,
+          "projectileSpeed": 340,
+          "projectileGravity": 150,
+          "rangedCooldown": 0,
+          "accuracy": 0.78,
+          "armor": 1.12,
+          "mass": 0.9,
+          "chargePower": 1,
+          "chargeMinSpeed": 999
+        },
+        "3": {
+          "hp": 96,
+          "moveSpeed": 99.75,
+          "attackDamage": 7.32,
+          "attackRate": 1.25,
+          "meleeRange": 12,
+          "rangedDamage": 8.64,
+          "rangedRange": 390,
+          "projectileSpeed": 340,
+          "projectileGravity": 150,
+          "rangedCooldown": 0,
+          "accuracy": 0.78,
+          "armor": 1.24,
+          "mass": 0.9,
+          "chargePower": 1,
+          "chargeMinSpeed": 999
+        }
+      }
+    }
+  ],
+  "startingArmy": {
+    "gold": 55,
+    "supplies": 35,
+    "recruits": 12,
+    "squads": [
+      { "archetypeId": "infantry", "size": 30, "tier": 1, "name": "Vanguard" },
+      { "archetypeId": "spearmen", "size": 28, "tier": 1, "name": "Pikes" },
+      { "archetypeId": "archers", "size": 24, "tier": 1, "name": "Bowline" }
+    ]
+  }
+}

@@ -12,9 +12,6 @@ import type {
 } from './IObjective';
 import { objectiveDisplayName } from './ObjectiveTypes';
 
-const CAPTURE_GAIN_RATE = 0.8;
-const CONTESTED_DECAY_RATE = 0.35;
-
 export class CapturePointObjective implements IObjective {
   readonly id: string;
   readonly type = 'CAPTURE' as const;
@@ -23,6 +20,9 @@ export class CapturePointObjective implements IObjective {
   readonly radius: number;
   private readonly radiusSq: number;
   private captureRateMultiplier: number;
+  private readonly baseGainRate: number;
+  private readonly contestedDecayRate: number;
+  private readonly opposingProgressDrainFactor: number;
 
   progressBlue = 0;
   progressRed = 0;
@@ -39,12 +39,23 @@ export class CapturePointObjective implements IObjective {
   };
   private readonly tacticalState: ObjectiveTacticalState;
 
-  constructor(id: string, position: Vec2, radius: number, captureRateMultiplier: number) {
+  constructor(
+    id: string,
+    position: Vec2,
+    radius: number,
+    captureRateMultiplier: number,
+    baseGainRate: number,
+    contestedDecayRate: number,
+    opposingProgressDrainFactor: number,
+  ) {
     this.id = id;
     this.position = position.clone();
     this.radius = radius;
     this.radiusSq = radius * radius;
     this.captureRateMultiplier = Math.max(0.1, captureRateMultiplier);
+    this.baseGainRate = Math.max(0.01, baseGainRate);
+    this.contestedDecayRate = Math.max(0, contestedDecayRate);
+    this.opposingProgressDrainFactor = Math.max(0, Math.min(1, opposingProgressDrainFactor));
 
     this.tacticalState = {
       type: this.type,
@@ -92,21 +103,22 @@ export class CapturePointObjective implements IObjective {
 
     const diff = this.blueInside - this.redInside;
     if (diff > 0) {
-      this.progressBlue += diff * CAPTURE_GAIN_RATE * this.captureRateMultiplier * dt;
+      this.progressBlue += diff * this.baseGainRate * this.captureRateMultiplier * dt;
       this.progressRed = Math.max(
         0,
-        this.progressRed - diff * CAPTURE_GAIN_RATE * 0.45 * this.captureRateMultiplier * dt,
+        this.progressRed - diff * this.baseGainRate * this.opposingProgressDrainFactor * this.captureRateMultiplier * dt,
       );
     } else if (diff < 0) {
       const magnitude = -diff;
-      this.progressRed += magnitude * CAPTURE_GAIN_RATE * this.captureRateMultiplier * dt;
+      this.progressRed += magnitude * this.baseGainRate * this.captureRateMultiplier * dt;
       this.progressBlue = Math.max(
         0,
-        this.progressBlue - magnitude * CAPTURE_GAIN_RATE * 0.45 * this.captureRateMultiplier * dt,
+        this.progressBlue -
+          magnitude * this.baseGainRate * this.opposingProgressDrainFactor * this.captureRateMultiplier * dt,
       );
     } else if (this.blueInside > 0 && this.redInside > 0) {
-      this.progressBlue = Math.max(0, this.progressBlue - CONTESTED_DECAY_RATE * this.captureRateMultiplier * dt);
-      this.progressRed = Math.max(0, this.progressRed - CONTESTED_DECAY_RATE * this.captureRateMultiplier * dt);
+      this.progressBlue = Math.max(0, this.progressBlue - this.contestedDecayRate * this.captureRateMultiplier * dt);
+      this.progressRed = Math.max(0, this.progressRed - this.contestedDecayRate * this.captureRateMultiplier * dt);
     }
 
     this.progressBlue = clamp(this.progressBlue, 0, 100);

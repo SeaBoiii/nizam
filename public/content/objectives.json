@@ -1,0 +1,44 @@
+{
+  "contentVersion": "1.0.0",
+  "selectionWeightsByNodeType": {
+    "BATTLE": { "CAPTURE": 0.55, "ASSASSINATE": 0.15, "HOLDOUT": 0.15, "ESCORT": 0.15 },
+    "ELITE": { "CAPTURE": 0.5, "ASSASSINATE": 0.5, "HOLDOUT": 0.0, "ESCORT": 0.0 },
+    "BOSS": { "CAPTURE": 0.4, "ASSASSINATE": 0.6, "HOLDOUT": 0.0, "ESCORT": 0.0 }
+  },
+  "capture": {
+    "radius": 240,
+    "baseGainRate": 0.8,
+    "contestedDecayRate": 0.35,
+    "opposingProgressDrainFactor": 0.45,
+    "speedMultiplierByNodeType": {
+      "BATTLE": 1.0,
+      "ELITE": 0.78,
+      "BOSS": 0.62
+    }
+  },
+  "holdout": {
+    "durationSeconds": 120,
+    "waveIntervalSeconds": 25,
+    "maxWaves": 4,
+    "zoneRadius": 180,
+    "waveMinSquads": 1,
+    "waveMaxSquads": 2,
+    "waveBaseSize": 17,
+    "waveRandomSizeMaxAdd": 4,
+    "waveSizePerDifficulty": 2,
+    "waveSizePerWave": 1,
+    "waveArchetypes": ["infantry", "spearmen", "cavalry", "archers"]
+  },
+  "escort": {
+    "timeLimitSeconds": 180,
+    "caravanHp": 480,
+    "caravanSpeed": 62,
+    "caravanRadius": 8,
+    "exitRadius": 120,
+    "exitHoldSeconds": 3,
+    "startX": 260,
+    "exitXPadding": 220,
+    "startJitterY": 180,
+    "exitJitterY": 220
+  }
+}

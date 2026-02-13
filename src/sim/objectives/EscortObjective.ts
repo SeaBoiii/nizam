@@ -4,14 +4,6 @@ import { clamp } from '../../utils/math';
 import { Vec2 } from '../../utils/vec2';
 import type { Soldier } from '../Soldier';
 import { TeamId } from '../types';
-import {
-  ESCORT_CARAVAN_HP,
-  ESCORT_CARAVAN_RADIUS,
-  ESCORT_CARAVAN_SPEED,
-  ESCORT_EXIT_HOLD_SECONDS,
-  ESCORT_EXIT_RADIUS,
-  ESCORT_TIME_LIMIT_SECONDS,
-} from '../rules/ObjectiveTuning';
 import type { UnitArchetype } from '../types/UnitArchetype';
 import type {
   IObjective,
@@ -29,6 +21,9 @@ interface EscortOptions {
   timeLimitSeconds?: number;
   caravanHp?: number;
   caravanSpeed?: number;
+  caravanRadius?: number;
+  exitRadius?: number;
+  exitHoldSeconds?: number;
 }
 
 function buildCaravanArchetype(hp: number, speed: number): UnitArchetype {
@@ -66,6 +61,7 @@ export class EscortObjective implements IObjective {
   private readonly caravanArchetype: UnitArchetype;
   private readonly holdSeconds: number;
   private readonly exitRadius: number;
+  private readonly caravanRadius: number;
   private readonly startDistance: number;
 
   private caravan: Soldier | null = null;
@@ -86,12 +82,13 @@ export class EscortObjective implements IObjective {
     this.id = options.id;
     this.start.copy(options.start);
     this.exit.copy(options.exit);
-    this.timeLimitSeconds = Math.max(60, options.timeLimitSeconds ?? ESCORT_TIME_LIMIT_SECONDS);
-    this.exitRadius = ESCORT_EXIT_RADIUS;
-    this.holdSeconds = ESCORT_EXIT_HOLD_SECONDS;
+    this.timeLimitSeconds = Math.max(60, options.timeLimitSeconds ?? 180);
+    this.exitRadius = Math.max(32, options.exitRadius ?? 120);
+    this.holdSeconds = Math.max(0.2, options.exitHoldSeconds ?? 3);
+    this.caravanRadius = Math.max(2, options.caravanRadius ?? 8);
     this.caravanArchetype = buildCaravanArchetype(
-      options.caravanHp ?? ESCORT_CARAVAN_HP,
-      options.caravanSpeed ?? ESCORT_CARAVAN_SPEED,
+      options.caravanHp ?? 480,
+      options.caravanSpeed ?? 62,
     );
     this.startDistance = Math.max(1, this.start.distanceTo(this.exit));
 
@@ -216,7 +213,7 @@ export class EscortObjective implements IObjective {
       gfx.lineTo(this.exit.x, this.exit.y);
       gfx.stroke({ color: 0xd9d9aa, alpha: 0.45, width: 1.2 });
 
-      gfx.circle(this.caravan.position.x, this.caravan.position.y, ESCORT_CARAVAN_RADIUS + 2);
+      gfx.circle(this.caravan.position.x, this.caravan.position.y, this.caravanRadius + 2);
       gfx.stroke({ color: 0xe9dab0, alpha: 0.85, width: 1.2 });
     }
   }
