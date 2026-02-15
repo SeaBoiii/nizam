@@ -44,6 +44,7 @@ export class TitleState implements IGameState {
   private readonly newRunButton: TextButton;
   private readonly continueButton: TextButton;
   private readonly clearButton: TextButton;
+  private readonly statsButton: TextButton;
   private readonly normalButton: TextButton;
   private readonly hardButton: TextButton;
   private selectedDifficulty = DifficultyMode.NORMAL;
@@ -84,6 +85,13 @@ export class TitleState implements IGameState {
       },
     });
 
+    this.statsButton = new TextButton({
+      label: 'Stats',
+      onClick: () => {
+        this.context.transitionTo('STATS', { returnState: 'TITLE' });
+      },
+    });
+
     this.normalButton = new TextButton({
       label: 'Normal',
       width: 130,
@@ -108,6 +116,7 @@ export class TitleState implements IGameState {
     this.root.addChild(this.newRunButton);
     this.root.addChild(this.continueButton);
     this.root.addChild(this.clearButton);
+    this.root.addChild(this.statsButton);
     this.root.addChild(this.normalButton);
     this.root.addChild(this.hardButton);
   }
@@ -152,8 +161,9 @@ export class TitleState implements IGameState {
     this.newRunButton.position.set(width * 0.5 - 110, height * 0.47);
     this.continueButton.position.set(width * 0.5 - 110, height * 0.55);
     this.clearButton.position.set(width * 0.5 - 110, height * 0.63);
-    this.normalButton.position.set(width * 0.5 - 134, height * 0.72);
-    this.hardButton.position.set(width * 0.5 + 4, height * 0.72);
+    this.statsButton.position.set(width * 0.5 - 110, height * 0.71);
+    this.normalButton.position.set(width * 0.5 - 134, height * 0.8);
+    this.hardButton.position.set(width * 0.5 + 4, height * 0.8);
   }
 
   private refreshDifficultyButtons(): void {

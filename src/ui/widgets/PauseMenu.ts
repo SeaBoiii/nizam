@@ -13,6 +13,7 @@ interface PauseMenuOptions {
   onSettingsChanged: (settings: GameSettings) => void;
   onResume: () => void;
   onQuitToTitle: () => void;
+  onShowStats: () => void;
 }
 
 function boolLabel(value: boolean): string {
@@ -47,6 +48,7 @@ export class PauseMenu {
   private readonly resumeButton: TextButton;
   private readonly settingsButton: TextButton;
   private readonly controlsButton: TextButton;
+  private readonly statsButton: TextButton;
   private readonly quitButton: TextButton;
 
   private readonly backButton: TextButton;
@@ -72,6 +74,7 @@ export class PauseMenu {
   private readonly onSettingsChanged: (settings: GameSettings) => void;
   private readonly onResume: () => void;
   private readonly onQuitToTitle: () => void;
+  private readonly onShowStats: () => void;
 
   private view: PauseView = 'main';
   private screenWidth = 1280;
@@ -82,6 +85,7 @@ export class PauseMenu {
     this.onSettingsChanged = options.onSettingsChanged;
     this.onResume = options.onResume;
     this.onQuitToTitle = options.onQuitToTitle;
+    this.onShowStats = options.onShowStats;
 
     this.root.visible = false;
     this.root.eventMode = 'static';
@@ -92,6 +96,7 @@ export class PauseMenu {
     this.resumeButton = new TextButton({ label: 'Resume', width: 260, onClick: () => this.resume() });
     this.settingsButton = new TextButton({ label: 'Settings', width: 260, onClick: () => this.showView('settings') });
     this.controlsButton = new TextButton({ label: 'Controls', width: 260, onClick: () => this.showView('controls') });
+    this.statsButton = new TextButton({ label: 'Stats', width: 260, onClick: () => this.showStats() });
     this.quitButton = new TextButton({ label: 'Quit To Title', width: 260, onClick: () => this.showView('confirm_quit') });
 
     this.backButton = new TextButton({ label: 'Back', width: 180, onClick: () => this.showView('main') });
@@ -136,6 +141,7 @@ export class PauseMenu {
     this.root.addChild(this.resumeButton);
     this.root.addChild(this.settingsButton);
     this.root.addChild(this.controlsButton);
+    this.root.addChild(this.statsButton);
     this.root.addChild(this.quitButton);
     this.root.addChild(this.backButton);
     this.root.addChild(this.resetSettingsButton);
@@ -226,6 +232,7 @@ export class PauseMenu {
     this.resumeButton.visible = inMain;
     this.settingsButton.visible = inMain;
     this.controlsButton.visible = inMain;
+    this.statsButton.visible = inMain;
     this.quitButton.visible = inMain;
 
     this.backButton.visible = inSettings || inControls;
@@ -269,7 +276,8 @@ export class PauseMenu {
     this.resumeButton.position.set(centerX - 130, panelY + 120);
     this.settingsButton.position.set(centerX - 130, panelY + 176);
     this.controlsButton.position.set(centerX - 130, panelY + 232);
-    this.quitButton.position.set(centerX - 130, panelY + 288);
+    this.statsButton.position.set(centerX - 130, panelY + 288);
+    this.quitButton.position.set(centerX - 130, panelY + 344);
 
     this.backButton.position.set(panelX + 30, panelY + 382);
     this.resetSettingsButton.position.set(panelX + panelW - 210, panelY + 382);
@@ -334,5 +342,9 @@ export class PauseMenu {
     this.trailsToggle.setLabel(`Trails ${boolLabel(settings.showTrails)}`);
     this.shakeToggle.setLabel(`Reduce Shake ${boolLabel(settings.reduceScreenShake)}`);
   }
-}
 
+  private showStats(): void {
+    this.root.visible = false;
+    this.onShowStats();
+  }
+}

@@ -97,7 +97,7 @@ If a content file is missing or invalid, the game falls back to built-in default
 
 ## Controls
 
-- Title: click `New Run`, `Continue`, `Reset Save`
+- Title: click `New Run`, `Continue`, `Reset Save`, `Stats`
 - Title: pick `Normal` or `Hard` before `New Run`
 - Overworld: left click connected nodes to advance, click `Back To Title` to return
 - Battle camera pan: `WASD` or Arrow keys
@@ -116,6 +116,7 @@ If a content file is missing or invalid, the game falls back to built-in default
 - Rewards: when a perk offer appears, click one perk card to continue
 - Debug panel toggle (all states): `F1` or `` ` ``
 - Pause menu (Battle + Overworld): `ESC`
+- Pause menu: `Stats` opens the local stats screen
 
 ## Perks + Difficulty (Sprint 6)
 
@@ -140,6 +141,7 @@ If a content file is missing or invalid, the game falls back to built-in default
   - Resume
   - Settings
   - Controls
+  - Stats
   - Quit To Title (with confirmation)
 - Settings are saved to localStorage key `nizam_settings_v1`:
   - `masterVolume`, `sfxVolume`, `musicVolume`
@@ -149,6 +151,24 @@ If a content file is missing or invalid, the game falls back to built-in default
   - `reduceScreenShake`
 - Browser audio is unlocked on first user interaction (click/tap). Some browsers block sound until then.
 - Gameplay SFX cues are throttled to avoid spam (arrows, impacts, rout, etc.).
+
+## Telemetry-lite + Export (Sprint 8.2)
+
+- No external analytics or trackers are used.
+- Stats are stored locally only in localStorage key `nizam_stats_v1`.
+- The Stats screen is available from:
+  - Title (`Stats`)
+  - Pause menu (`Stats`)
+- Stats screen includes:
+  - run/battle totals and winrates
+  - objective play/win stats
+  - top perks picked
+  - top orders issued
+  - depth bucket averages (duration and casualty %)
+- Export for sharing balance reports/bug context:
+  - `Copy Stats JSON`
+  - `Copy Last Run JSON`
+- `Reset Stats` is available with confirmation on the Stats screen.
 
 ## Battle objectives (Sprint 4)
 

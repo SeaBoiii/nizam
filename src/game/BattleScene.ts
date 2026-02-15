@@ -44,6 +44,7 @@ interface BattleSceneOptions {
   armyState: ArmyState;
   playerPerkMods: Readonly<CombinedPerkMods>;
   settings: GameSettings;
+  onEventsReady?: (events: GameEvents) => void;
   onFinished: (result: BattleResult) => void;
 }
 
@@ -179,6 +180,9 @@ export class BattleScene {
     this.hitFlashSystem = new HitFlashSystem(this.overlayLayer);
     this.routBurstSystem = new RoutBurstSystem(this.overlayLayer);
     this.bindEventChannels();
+    if (options.onEventsReady) {
+      options.onEventsReady(this.gameEvents);
+    }
 
     this.drawMap();
 
@@ -870,15 +874,38 @@ export class BattleScene {
     const result: BattleResult = {
       scenario: this.scenario,
       victory: playerWon,
+      durationSec: this.simTime,
       playerInitial: this.playerInitial,
       playerRemaining,
       enemyInitial: this.enemyInitial,
       enemyRemaining,
       playerCasualties: Math.max(0, this.playerInitial - playerRemaining),
       enemyCasualties: Math.max(0, this.enemyInitial - enemyRemaining),
+      archetypeDeaths: this.computeArchetypeDeaths(),
     };
 
     this.onFinished(result);
+  }
+
+  private computeArchetypeDeaths(): Record<string, number> {
+    const deaths: Record<string, number> = {};
+
+    for (let i = 0; i < this.squads.length; i += 1) {
+      const squad = this.squads[i];
+      let alive = 0;
+      const soldiers = squad.soldiers;
+      for (let j = 0; j < soldiers.length; j += 1) {
+        if (soldiers[j].alive) {
+          alive += 1;
+        }
+      }
+      const dead = soldiers.length - alive;
+      if (dead > 0) {
+        deaths[squad.archetype.id] = (deaths[squad.archetype.id] ?? 0) + dead;
+      }
+    }
+
+    return deaths;
   }
 
   private countTeamAlive(team: TeamId): number {

@@ -5,11 +5,13 @@ import { createStartingArmy } from '../meta/Army';
 import { DifficultyMode } from '../meta/Difficulty';
 import { createPerkState } from '../meta/Perks';
 import { loadSettings, saveSettings, type GameSettings } from '../meta/Settings';
+import { StatsCollector } from '../meta/StatsCollector';
 import { createScenario } from '../meta/ScenarioFactory';
 import { clearSave, hasSave, loadGame, saveGame } from '../meta/Save';
 import type { BattleResult, BattleScenario } from '../meta/types';
 import { generateMap } from '../overworld/generateMap';
 import type { RunState } from '../overworld/types';
+import type { GameEvents } from '../sim/events/GameEvents';
 import { DebugPanel } from '../ui/widgets/DebugPanel';
 import { PauseMenu } from '../ui/widgets/PauseMenu';
 import { setTextButtonClickListener } from '../ui/widgets/TextButton';
@@ -17,6 +19,7 @@ import type { IGameState } from './states/IGameState';
 import { BattleState } from './states/BattleState';
 import { OverworldState } from './states/OverworldState';
 import { RewardsState } from './states/RewardsState';
+import { StatsState } from './states/StatsState';
 import type { CampaignData, GameStateId, StateContext } from './states/StateContext';
 import { TitleState } from './states/TitleState';
 
@@ -30,6 +33,7 @@ export class Game {
   private lastBattleResult: BattleResult | null = null;
   private settings: GameSettings = loadSettings();
   private paused = false;
+  private readonly statsCollector = new StatsCollector();
 
   private readonly debugPanel: DebugPanel;
   private readonly pauseMenu: PauseMenu;
@@ -67,6 +71,16 @@ export class Game {
         this.lastBattleResult = result;
       },
       getLastBattleResult: () => this.lastBattleResult,
+      bindBattleTelemetry: (events) => this.bindBattleTelemetry(events),
+      markBattleStarted: (scenario) => this.markBattleStarted(scenario),
+      markBattleEnded: (result) => this.markBattleEnded(result),
+      markBattleAborted: () => this.markBattleAborted(),
+      markPerkOffered: (choiceCount) => this.statsCollector.recordPerkOffered(choiceCount),
+      markPerkPicked: (perkId) =>
+        this.statsCollector.recordPerkPicked(perkId, this.campaignData ? this.campaignData.perkState : null),
+      markRunCompleted: (outcome) => this.markRunCompleted(outcome),
+      getStatsSnapshot: () => this.statsCollector.getSnapshot(),
+      resetStatsData: () => this.statsCollector.reset(),
       transitionTo: (stateId, payload) => this.transitionTo(stateId, payload),
     };
 
@@ -92,6 +106,11 @@ export class Game {
         this.setPaused(false);
         this.transitionTo('TITLE');
       },
+      onShowStats: () => {
+        const returnState = this.currentStateId === 'BATTLE' ? 'BATTLE' : 'OVERWORLD';
+        this.setPaused(false);
+        this.transitionTo('STATS', { returnState });
+      },
     });
 
     setTextButtonClickListener(() => {
@@ -112,11 +131,21 @@ export class Game {
 
     const frameDt = this.app.ticker.deltaMS / 1000;
     this.currentState.update(this.paused ? 0 : frameDt);
+    this.statsCollector.update(
+      frameDt,
+      this.campaignData !== null &&
+        !this.paused &&
+        this.currentStateId !== 'TITLE' &&
+        this.currentStateId !== 'STATS',
+    );
     this.updateDebugPanel();
     this.pauseMenu.layout(this.app.screen.width, this.app.screen.height);
   };
 
   private transitionTo(stateId: GameStateId, payload?: unknown): void {
+    if (stateId === 'TITLE' && this.currentStateId !== 'TITLE' && this.campaignData !== null) {
+      this.statsCollector.onRunAbandoned(this.campaignData.runState, this.campaignData.perkState);
+    }
     this.setPaused(false);
 
     if (this.currentState !== null) {
@@ -142,6 +171,9 @@ export class Game {
       case 'REWARDS':
         this.currentState = new RewardsState(this.stateContext);
         break;
+      case 'STATS':
+        this.currentState = new StatsState(this.stateContext);
+        break;
     }
 
     this.currentState.onEnter(payload);
@@ -154,6 +186,10 @@ export class Game {
   }
 
   private startNewRun(mode: DifficultyMode = DifficultyMode.NORMAL): void {
+    if (this.campaignData !== null) {
+      this.statsCollector.onRunAbandoned(this.campaignData.runState, this.campaignData.perkState);
+    }
+
     const seed = (Date.now() ^ (Math.random() * 0xffffffff)) >>> 0;
     const mapState = generateMap(seed);
 
@@ -183,6 +219,7 @@ export class Game {
 
     this.pendingScenario = null;
     this.lastBattleResult = null;
+    this.statsCollector.onRunStarted(runState, this.campaignData.perkState);
 
     this.saveCampaignData();
   }
@@ -221,6 +258,7 @@ export class Game {
 
     this.pendingScenario = null;
     this.lastBattleResult = null;
+    this.statsCollector.onRunLoaded(runState, loaded.perkState);
 
     return true;
   }
@@ -230,12 +268,14 @@ export class Game {
       return;
     }
 
+    this.statsCollector.syncRunSnapshot(this.campaignData.runState, this.campaignData.perkState);
     saveGame({
       runState: this.campaignData.runState,
       armyState: this.campaignData.armyState,
       perkState: this.campaignData.perkState,
       mapState: this.campaignData.mapState,
     });
+    this.statsCollector.saveNow();
   }
 
   private clearSaveData(): void {
@@ -245,6 +285,7 @@ export class Game {
   private readonly onBeforeUnload = (): void => {
     this.saveCampaignData();
     saveSettings(this.settings);
+    this.statsCollector.saveNow();
   };
 
   private readonly onGlobalKeyDown = (event: KeyboardEvent): void => {
@@ -376,5 +417,49 @@ export class Game {
       this.currentState.setPaused(paused);
     }
   }
-}
 
+  private bindBattleTelemetry(events: GameEvents): () => void {
+    return this.statsCollector.bindGameEvents(events);
+  }
+
+  private markBattleStarted(scenario: BattleScenario): void {
+    if (this.campaignData === null) {
+      return;
+    }
+    this.statsCollector.onBattleStarted(
+      scenario,
+      this.campaignData.runState,
+      this.campaignData.perkState,
+      this.campaignData.armyState.squads,
+    );
+  }
+
+  private markBattleEnded(result: BattleResult): void {
+    this.statsCollector.onBattleEnded(
+      result,
+      this.campaignData ? this.campaignData.runState : null,
+      this.campaignData ? this.campaignData.perkState : null,
+    );
+    if (this.campaignData !== null && result.scenario.nodeType === 'BOSS') {
+      this.statsCollector.onRunCompleted(
+        this.campaignData.runState,
+        this.campaignData.perkState,
+        result.victory ? 'WIN' : 'LOSS',
+      );
+    }
+  }
+
+  private markBattleAborted(): void {
+    this.statsCollector.onBattleAborted(
+      this.campaignData ? this.campaignData.runState : null,
+      this.campaignData ? this.campaignData.perkState : null,
+    );
+  }
+
+  private markRunCompleted(outcome: 'WIN' | 'LOSS'): void {
+    if (this.campaignData === null) {
+      return;
+    }
+    this.statsCollector.onRunCompleted(this.campaignData.runState, this.campaignData.perkState, outcome);
+  }
+}

@@ -10,10 +10,13 @@ export class BattleState implements IGameState {
   private readonly root = new Container();
   private battleScene: BattleScene | null = null;
   private currentSettings: GameSettings = getDefaultSettings();
+  private battleResolved = false;
+  private unbindTelemetry: (() => void) | null = null;
 
   constructor(private readonly context: StateContext) {}
 
   onEnter(payload?: unknown): void {
+    this.battleResolved = false;
     const campaign = this.context.getCampaignData();
     if (campaign === null) {
       this.context.transitionTo('TITLE');
@@ -26,6 +29,12 @@ export class BattleState implements IGameState {
       return;
     }
     this.context.setPendingScenario(scenario);
+    this.context.markBattleStarted(scenario);
+    this.battleResolved = false;
+    if (this.unbindTelemetry !== null) {
+      this.unbindTelemetry();
+      this.unbindTelemetry = null;
+    }
 
     this.context.stage.addChild(this.root);
 
@@ -36,7 +45,15 @@ export class BattleState implements IGameState {
       armyState: campaign.armyState,
       playerPerkMods: getCombinedPerkMods(campaign.perkState.pickedPerkIds),
       settings: this.currentSettings,
+      onEventsReady: (events) => {
+        if (this.unbindTelemetry !== null) {
+          this.unbindTelemetry();
+        }
+        this.unbindTelemetry = this.context.bindBattleTelemetry(events);
+      },
       onFinished: (result) => {
+        this.battleResolved = true;
+        this.context.markBattleEnded(result);
         this.context.setLastBattleResult(result);
         this.context.transitionTo('REWARDS', result);
       },
@@ -44,6 +61,13 @@ export class BattleState implements IGameState {
   }
 
   onExit(): void {
+    if (!this.battleResolved && this.battleScene !== null) {
+      this.context.markBattleAborted();
+    }
+    if (this.unbindTelemetry !== null) {
+      this.unbindTelemetry();
+      this.unbindTelemetry = null;
+    }
     if (this.battleScene !== null) {
       this.battleScene.destroy();
       this.battleScene = null;

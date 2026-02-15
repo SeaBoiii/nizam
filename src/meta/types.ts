@@ -26,10 +26,12 @@ export interface BattleScenario {
 export interface BattleResult {
   scenario: BattleScenario;
   victory: boolean;
+  durationSec: number;
   playerInitial: number;
   playerRemaining: number;
   enemyInitial: number;
   enemyRemaining: number;
   playerCasualties: number;
   enemyCasualties: number;
+  archetypeDeaths: Record<string, number>;
 }

@@ -136,6 +136,9 @@ export class RewardsState implements IGameState {
     }
 
     const victory = resolvedResult.victory;
+    if (resolvedResult.scenario.nodeType === 'BOSS') {
+      this.context.markRunCompleted(victory ? 'WIN' : 'LOSS');
+    }
 
     this.title.text = victory ? 'Victory Rewards' : 'Defeat Spoils';
     this.summary.text = [
@@ -323,6 +326,7 @@ export class RewardsState implements IGameState {
       return;
     }
 
+    this.context.markPerkOffered(choices.length);
     this.perkChoicePending = true;
     this.perkChoice.show(choices, (perkId) => this.applyPerkChoice(perkId), this.context.app.screen.width, this.context.app.screen.height);
   }
@@ -336,6 +340,7 @@ export class RewardsState implements IGameState {
     if (!campaign.perkState.pickedPerkIds.includes(perkId)) {
       campaign.perkState.pickedPerkIds.push(perkId);
     }
+    this.context.markPerkPicked(perkId);
     campaign.perkState.lastOfferedAtBattleCount = campaign.runState.battleNodesCleared;
     const perk = contentManager.getPerk(perkId);
     this.rewardInfo.text += `\nPerk selected: ${perk ? perk.name : perkId}.`;
