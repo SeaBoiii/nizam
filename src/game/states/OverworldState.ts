@@ -442,7 +442,10 @@ export class OverworldState implements IGameState {
       if (node) {
         if (isBattleNode(node.type)) {
           const objectiveLabel = objectivePreviewLabel(node.id, node.type, campaign.runState);
-          this.tooltipText.text = `${node.type} (${objectiveLabel}) - ${nodeRewardHint(node.type)}`;
+          const preview = createScenario(node.id, node.type, campaign.runState, campaign.armyState);
+          const map = contentManager.getMap(preview.mapId);
+          const mapLabel = map ? map.name : preview.mapId;
+          this.tooltipText.text = `${node.type} (${objectiveLabel}) [${mapLabel}] - ${nodeRewardHint(node.type)}`;
         } else {
           this.tooltipText.text = `${node.type} - ${nodeRewardHint(node.type)}`;
         }

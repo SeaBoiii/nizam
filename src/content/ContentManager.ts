@@ -1,6 +1,8 @@
 import type {
+  BattleMapContent,
   ContentFileName,
   ContentLoadStatus,
+  MapsContent,
   LoadedContent,
   NodeDepthWeightsContent,
   NodesTuningContent,
@@ -18,6 +20,7 @@ import {
   DEFAULT_NODES_CONTENT,
   DEFAULT_OBJECTIVES_CONTENT,
   DEFAULT_PERKS_CONTENT,
+  DEFAULT_MAPS_CONTENT,
   DEFAULT_SCENARIOS_CONTENT,
   DEFAULT_UNITS_CONTENT,
   DEFAULT_UPGRADES_CONTENT,
@@ -232,13 +235,74 @@ function cloneScenariosContent(content: ScenariosContent): ScenariosContent {
       })),
     }));
 
+  const cloneMapBuckets = (buckets: ScenariosContent['mapPoolsByNodeType']['BATTLE']) =>
+    buckets.map((bucket) => ({
+      depthMin: bucket.depthMin,
+      depthMax: bucket.depthMax,
+      maps: bucket.maps.map((entry) => ({
+        id: entry.id,
+        weight: entry.weight,
+      })),
+    }));
+
   return {
     contentVersion: content.contentVersion,
     objectivePowerScale: { ...content.objectivePowerScale },
+    mapPoolsByNodeType: {
+      BATTLE: cloneMapBuckets(content.mapPoolsByNodeType.BATTLE),
+      ELITE: cloneMapBuckets(content.mapPoolsByNodeType.ELITE),
+      BOSS: cloneMapBuckets(content.mapPoolsByNodeType.BOSS),
+    },
     templatesByNodeType: {
       BATTLE: cloneBuckets(content.templatesByNodeType.BATTLE),
       ELITE: cloneBuckets(content.templatesByNodeType.ELITE),
       BOSS: cloneBuckets(content.templatesByNodeType.BOSS),
+    },
+  };
+}
+
+function cloneMapEntry(map: BattleMapContent): BattleMapContent {
+  return {
+    id: map.id,
+    name: map.name,
+    size: {
+      w: map.size.w,
+      h: map.size.h,
+    },
+    spawns: {
+      blue: map.spawns.blue.map((spawn) => ({
+        x: spawn.x,
+        y: spawn.y,
+      })),
+      red: map.spawns.red.map((spawn) => ({
+        x: spawn.x,
+        y: spawn.y,
+      })),
+    },
+    objectives: {
+      capturePoint: { ...map.objectives.capturePoint },
+      exitZone: { ...map.objectives.exitZone },
+    },
+    terrain: map.terrain.map((terrain) => ({
+      type: terrain.type,
+      x: terrain.x,
+      y: terrain.y,
+      w: terrain.w,
+      h: terrain.h,
+    })),
+  };
+}
+
+function cloneMapsContent(content: MapsContent): MapsContent {
+  return {
+    version: content.version,
+    maps: content.maps.map((map) => cloneMapEntry(map)),
+    terrainRules: {
+      forest: { ...content.terrainRules.forest },
+      hill: { ...content.terrainRules.hill },
+    },
+    nav: {
+      cellSize: content.nav.cellSize,
     },
   };
 }
@@ -250,6 +314,7 @@ const DEFAULT_CONTENT: LoadedContent = {
   objectives: cloneObjectivesContent(DEFAULT_OBJECTIVES_CONTENT),
   nodes: cloneNodesContent(DEFAULT_NODES_CONTENT),
   scenarios: cloneScenariosContent(DEFAULT_SCENARIOS_CONTENT),
+  maps: cloneMapsContent(DEFAULT_MAPS_CONTENT),
 };
 
 function cloneLoadedContent(content: LoadedContent): LoadedContent {
@@ -260,6 +325,7 @@ function cloneLoadedContent(content: LoadedContent): LoadedContent {
     objectives: cloneObjectivesContent(content.objectives),
     nodes: cloneNodesContent(content.nodes),
     scenarios: cloneScenariosContent(content.scenarios),
+    maps: cloneMapsContent(content.maps),
   };
 }
 
@@ -611,8 +677,9 @@ function isValidScenariosContent(value: unknown): value is ScenariosContent {
     return false;
   }
   const objectivePowerScale = asObject(candidate.objectivePowerScale);
+  const mapPoolsByNodeType = asObject(candidate.mapPoolsByNodeType);
   const templatesByNodeType = asObject(candidate.templatesByNodeType);
-  if (!objectivePowerScale || !templatesByNodeType) {
+  if (!objectivePowerScale || !templatesByNodeType || !mapPoolsByNodeType) {
     return false;
   }
   if (
@@ -625,6 +692,33 @@ function isValidScenariosContent(value: unknown): value is ScenariosContent {
   }
 
   const nodeTypes = ['BATTLE', 'ELITE', 'BOSS'];
+  for (let i = 0; i < nodeTypes.length; i += 1) {
+    const list = mapPoolsByNodeType[nodeTypes[i]];
+    if (!Array.isArray(list) || list.length === 0) {
+      return false;
+    }
+    for (let j = 0; j < list.length; j += 1) {
+      const bucket = asObject(list[j]);
+      if (!bucket || !Array.isArray(bucket.maps) || bucket.maps.length === 0) {
+        return false;
+      }
+      if (!isFiniteNumber(bucket.depthMin) || !isFiniteNumber(bucket.depthMax)) {
+        return false;
+      }
+      for (let k = 0; k < bucket.maps.length; k += 1) {
+        const mapEntry = asObject(bucket.maps[k]);
+        if (
+          !mapEntry ||
+          typeof mapEntry.id !== 'string' ||
+          mapEntry.id.length === 0 ||
+          !isFiniteNumber(mapEntry.weight)
+        ) {
+          return false;
+        }
+      }
+    }
+  }
+
   for (let i = 0; i < nodeTypes.length; i += 1) {
     const list = templatesByNodeType[nodeTypes[i]];
     if (!Array.isArray(list) || list.length === 0) {
@@ -660,6 +754,110 @@ function isValidScenariosContent(value: unknown): value is ScenariosContent {
   return true;
 }
 
+function isValidMapTerrainEntry(value: unknown): boolean {
+  const entry = asObject(value);
+  if (!entry) {
+    return false;
+  }
+  if (entry.type !== 'OBSTACLE_RECT' && entry.type !== 'FOREST_RECT' && entry.type !== 'HILL_RECT') {
+    return false;
+  }
+  return (
+    isFiniteNumber(entry.x) &&
+    isFiniteNumber(entry.y) &&
+    isFiniteNumber(entry.w) &&
+    isFiniteNumber(entry.h)
+  );
+}
+
+function isValidSpawnList(value: unknown): boolean {
+  if (!Array.isArray(value) || value.length === 0) {
+    return false;
+  }
+  for (let i = 0; i < value.length; i += 1) {
+    const spawn = asObject(value[i]);
+    if (!spawn || !isFiniteNumber(spawn.x) || !isFiniteNumber(spawn.y)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isValidObjectiveCircle(value: unknown): boolean {
+  const circle = asObject(value);
+  if (!circle) {
+    return false;
+  }
+  return isFiniteNumber(circle.x) && isFiniteNumber(circle.y) && isFiniteNumber(circle.radius);
+}
+
+function isValidMapEntry(value: unknown): value is BattleMapContent {
+  const map = asObject(value);
+  if (!map || typeof map.id !== 'string' || typeof map.name !== 'string') {
+    return false;
+  }
+
+  const size = asObject(map.size);
+  const spawns = asObject(map.spawns);
+  const objectives = asObject(map.objectives);
+  if (!size || !spawns || !objectives || !Array.isArray(map.terrain)) {
+    return false;
+  }
+
+  if (!isFiniteNumber(size.w) || !isFiniteNumber(size.h)) {
+    return false;
+  }
+  if (!isValidSpawnList(spawns.blue) || !isValidSpawnList(spawns.red)) {
+    return false;
+  }
+  if (!isValidObjectiveCircle(objectives.capturePoint) || !isValidObjectiveCircle(objectives.exitZone)) {
+    return false;
+  }
+
+  for (let i = 0; i < map.terrain.length; i += 1) {
+    if (!isValidMapTerrainEntry(map.terrain[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isValidMapsContent(value: unknown): value is MapsContent {
+  const candidate = asObject(value);
+  if (!candidate || typeof candidate.version !== 'string' || !Array.isArray(candidate.maps) || candidate.maps.length === 0) {
+    return false;
+  }
+
+  const rules = asObject(candidate.terrainRules);
+  const nav = asObject(candidate.nav);
+  if (!rules || !nav) {
+    return false;
+  }
+  const forest = asObject(rules.forest);
+  const hill = asObject(rules.hill);
+  if (!forest || !hill) {
+    return false;
+  }
+  if (
+    !isFiniteNumber(forest.moveSpeedMult) ||
+    !isFiniteNumber(forest.rangedAccuracyAdd) ||
+    !isFiniteNumber(forest.projectileSpeedMult) ||
+    !isFiniteNumber(hill.rangedRangeMult) ||
+    !isFiniteNumber(hill.rangedAccuracyAdd) ||
+    !isFiniteNumber(nav.cellSize)
+  ) {
+    return false;
+  }
+
+  for (let i = 0; i < candidate.maps.length; i += 1) {
+    if (!isValidMapEntry(candidate.maps[i])) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 type Validator<T> = (value: unknown) => value is T;
 
 export class ContentManager {
@@ -676,6 +874,7 @@ export class ContentManager {
         objectives: 'default',
         nodes: 'default',
         scenarios: 'default',
+        maps: 'default',
       },
     };
   private readonly listeners = new Set<() => void>();
@@ -690,6 +889,7 @@ export class ContentManager {
       objectives: 'json',
       nodes: 'json',
       scenarios: 'json',
+      maps: 'json',
     };
 
     const units = await this.loadFile('units', isValidUnitsContent, cloneUnitsContent(DEFAULT_UNITS_CONTENT), forceReload, errors);
@@ -734,6 +934,10 @@ export class ContentManager {
     if (scenarios.source === 'default') {
       sourceByFile.scenarios = 'default';
     }
+    const maps = await this.loadFile('maps', isValidMapsContent, cloneMapsContent(DEFAULT_MAPS_CONTENT), forceReload, errors);
+    if (maps.source === 'default') {
+      sourceByFile.maps = 'default';
+    }
 
     this.content = {
       units: units.value,
@@ -742,6 +946,7 @@ export class ContentManager {
       objectives: objectives.value,
       nodes: nodes.value,
       scenarios: scenarios.value,
+      maps: maps.value,
     };
 
     const fallbackUsed =
@@ -750,7 +955,8 @@ export class ContentManager {
       sourceByFile.perks === 'default' ||
       sourceByFile.objectives === 'default' ||
       sourceByFile.nodes === 'default' ||
-      sourceByFile.scenarios === 'default';
+      sourceByFile.scenarios === 'default' ||
+      sourceByFile.maps === 'default';
 
     this.status = {
       loaded: true,
@@ -924,6 +1130,31 @@ export class ContentManager {
     return cloneScenariosContent(this.content.scenarios);
   }
 
+  getMap(mapId: string): BattleMapContent | null {
+    for (let i = 0; i < this.content.maps.maps.length; i += 1) {
+      const map = this.content.maps.maps[i];
+      if (map.id === mapId) {
+        return cloneMapEntry(map);
+      }
+    }
+    return null;
+  }
+
+  getAllMaps(): BattleMapContent[] {
+    return this.content.maps.maps.map((map) => cloneMapEntry(map));
+  }
+
+  getTerrainRules(): MapsContent['terrainRules'] {
+    return {
+      forest: { ...this.content.maps.terrainRules.forest },
+      hill: { ...this.content.maps.terrainRules.hill },
+    };
+  }
+
+  getNavCellSize(): number {
+    return Math.max(16, this.content.maps.nav.cellSize);
+  }
+
   private resolveContentVersion(): string {
     const first =
       this.content.units.contentVersion ||
@@ -931,7 +1162,8 @@ export class ContentManager {
       this.content.perks.version ||
       this.content.objectives.contentVersion ||
       this.content.nodes.contentVersion ||
-      this.content.scenarios.contentVersion;
+      this.content.scenarios.contentVersion ||
+      this.content.maps.version;
     return first || 'builtin';
   }
 

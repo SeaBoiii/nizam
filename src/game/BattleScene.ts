@@ -1,5 +1,6 @@
 import { Application, Container, Graphics } from 'pixi.js';
 import { audioManager } from '../audio/AudioManager';
+import { contentManager } from '../content/ContentManager';
 import type { GameSettings } from '../meta/Settings';
 import { Camera } from './Camera';
 import { formationLabel } from '../sim/Formation';
@@ -21,9 +22,14 @@ import { ProjectileSystem } from '../sim/combat/ProjectileSystem';
 import { RangedSystem } from '../sim/combat/RangedSystem';
 import { Minimap } from '../ui/widgets/Minimap';
 import { SquadIndicators } from '../ui/widgets/SquadIndicators';
+import { MapOverlay } from '../ui/widgets/MapOverlay';
 import type { BattleResult, BattleScenario } from '../meta/types';
 import type { ArmyState, SquadMeta } from '../meta/Army';
 import { getTieredArchetype } from '../meta/Progression';
+import { BattleMapState } from '../sim/map/MapState';
+import { FlowField } from '../sim/nav/FlowField';
+import { NavGrid } from '../sim/nav/NavGrid';
+import { TerrainMods } from '../sim/rules/TerrainMods';
 import type { UnitArchetype } from '../sim/types/UnitArchetype';
 import { createObjectiveForScenario } from '../sim/objectives/createObjective';
 import type { ObjectiveMinimapMarker, ObjectiveSpawnSquadRequest, ObjectiveWorld } from '../sim/objectives/IObjective';
@@ -32,8 +38,6 @@ import type { CombinedPerkMods } from '../sim/rules/PerkMods';
 import { DEFAULT_PERK_MODS } from '../sim/rules/PerkMods';
 
 const FIXED_DT = 1 / 60;
-const WORLD_WIDTH = 4000;
-const WORLD_HEIGHT = 2400;
 const CLICK_RADIUS_SQ = 42 * 42;
 const DRAG_THRESHOLD_SQ = 8 * 8;
 
@@ -74,15 +78,15 @@ export class BattleScene {
   private readonly armyState: ArmyState;
   private readonly playerPerkMods: Readonly<CombinedPerkMods>;
   private readonly onFinished: (result: BattleResult) => void;
-
-  private readonly worldBounds: WorldBounds = {
-    width: WORLD_WIDTH,
-    height: WORLD_HEIGHT,
-  };
+  private readonly worldBounds: WorldBounds;
+  private readonly battleMap: BattleMapState;
+  private readonly navGrid: NavGrid;
+  private readonly terrainMods: TerrainMods;
 
   private readonly root = new Container();
   private readonly worldLayer = new Container();
   private readonly mapLayer = new Graphics();
+  private readonly terrainLayer = new Container();
   private readonly objectiveLayer = new Container();
   private readonly objectiveGraphics = new Graphics();
   private readonly waypointLayer = new Graphics();
@@ -98,6 +102,7 @@ export class BattleScene {
   private readonly minimap: Minimap;
   private readonly selectionBox: SelectionBox;
   private readonly squadIndicators: SquadIndicators;
+  private readonly mapOverlay: MapOverlay;
   private readonly combat = new CombatSystem();
   private readonly rangedSystem = new RangedSystem();
   private readonly unitGrid = new SpatialHash(32);
@@ -117,6 +122,7 @@ export class BattleScene {
   private readonly aliveSoldiers: Soldier[] = [];
   private readonly minimapMarkers: ObjectiveMinimapMarker[] = [];
   private readonly orderEmitIds: number[] = [];
+  private readonly spawnTemp = new Vec2();
 
   private readonly pointerScreen = new Vec2();
   private readonly pointerWorld = new Vec2();
@@ -152,12 +158,31 @@ export class BattleScene {
     this.playerPerkMods = options.playerPerkMods;
     this.onFinished = options.onFinished;
 
+    const allMaps = contentManager.getAllMaps();
+    const mapContent = contentManager.getMap(this.scenario.mapId) ?? allMaps[0];
+    if (!mapContent) {
+      throw new Error('No battle maps available.');
+    }
+    this.battleMap = new BattleMapState(mapContent, contentManager.getTerrainRules(), contentManager.getNavCellSize());
+    this.worldBounds = {
+      width: this.battleMap.width,
+      height: this.battleMap.height,
+    };
+    this.navGrid = new NavGrid(
+      this.worldBounds.width,
+      this.worldBounds.height,
+      this.battleMap.cellSize,
+      this.battleMap.getObstacleRects(),
+    );
+    this.terrainMods = new TerrainMods(this.battleMap);
+
     this.objectiveManager = new ObjectiveManager(
-      createObjectiveForScenario(this.scenario, this.worldBounds, this.playerPerkMods),
+      createObjectiveForScenario(this.scenario, this.battleMap, this.playerPerkMods),
     );
 
     this.root.addChild(this.worldLayer);
     this.worldLayer.addChild(this.mapLayer);
+    this.worldLayer.addChild(this.terrainLayer);
     this.worldLayer.addChild(this.objectiveLayer);
     this.worldLayer.addChild(this.waypointLayer);
     this.worldLayer.addChild(this.trailLayer);
@@ -175,6 +200,8 @@ export class BattleScene {
     this.minimap = new Minimap(this.uiLayer, this.worldBounds);
     this.selectionBox = new SelectionBox(this.uiLayer);
     this.squadIndicators = new SquadIndicators(this.overlayLayer);
+    this.mapOverlay = new MapOverlay(this.terrainLayer);
+    this.mapOverlay.draw(this.battleMap);
     this.projectileSystem = new ProjectileSystem(this.projectileLayer);
     this.trailSystem = new TrailSystem(this.trailLayer);
     this.hitFlashSystem = new HitFlashSystem(this.overlayLayer);
@@ -190,21 +217,25 @@ export class BattleScene {
       dt: FIXED_DT,
       simTime: 0,
       world: this.worldBounds,
-      objectivePosition: new Vec2(this.worldBounds.width * 0.5, this.worldBounds.height * 0.5),
+      objectivePosition: new Vec2(this.battleMap.getCapturePoint().x, this.battleMap.getCapturePoint().y),
       allSquads: this.squads,
+      mapState: this.battleMap,
+      navGrid: this.navGrid,
+      terrainMods: this.terrainMods,
     };
 
     this.objectiveWorld = {
       scenario: this.scenario,
       bounds: this.worldBounds,
-      objectiveCenter: new Vec2(this.worldBounds.width * 0.5, this.worldBounds.height * 0.5),
+      mapState: this.battleMap,
+      objectiveCenter: new Vec2(this.battleMap.getCapturePoint().x, this.battleMap.getCapturePoint().y),
       simTime: 0,
       squads: this.squads,
       aliveSoldiers: this.aliveSoldiers,
       spawnSquad: (request) => this.spawnObjectiveSquad(request),
     };
 
-    this.camera.position.set(this.worldBounds.width * 0.5, this.worldBounds.height * 0.5);
+    this.camera.position.set(this.battleMap.getCapturePoint().x, this.battleMap.getCapturePoint().y);
     this.camera.setViewport(this.app.screen.width, this.app.screen.height);
     this.camera.applyTo(this.worldLayer);
     this.minimap.resize(this.app.screen.width, this.app.screen.height);
@@ -299,7 +330,7 @@ export class BattleScene {
     for (let i = 0; i < playerSquads.length; i += 1) {
       const squadMeta = playerSquads[i];
       const archetype = this.makeArchetypeForMeta(squadMeta, true);
-      const position = this.computeFormationSpawn(i, playerSquads.length, TeamId.Blue);
+      const position = this.computeFormationSpawn(i, TeamId.Blue);
       this.spawnRuntimeSquad(
         TeamId.Blue,
         archetype,
@@ -317,7 +348,7 @@ export class BattleScene {
     for (let i = 0; i < enemySquads.length; i += 1) {
       const squadMeta = enemySquads[i];
       const archetype = this.makeArchetypeForMeta(squadMeta, false);
-      const position = this.computeFormationSpawn(i, enemySquads.length, TeamId.Red);
+      const position = this.computeFormationSpawn(i, TeamId.Red);
       this.spawnRuntimeSquad(
         TeamId.Red,
         archetype,
@@ -350,12 +381,15 @@ export class BattleScene {
       };
     }
 
+    this.spawnTemp.set(request.x, request.y);
+    this.battleMap.pushOutOfObstacles(this.spawnTemp, 16);
+
     return this.spawnRuntimeSquad(
       request.team,
       archetype,
       request.soldierCount,
-      request.x,
-      request.y,
+      this.spawnTemp.x,
+      this.spawnTemp.y,
       request.facing,
       request.color,
       request.commandable ?? true,
@@ -387,6 +421,9 @@ export class BattleScene {
       commandable,
       perkMods,
       events: this.gameEvents,
+      flowField: new FlowField(this.navGrid),
+      navGrid: this.navGrid,
+      terrainMods: this.terrainMods,
     });
     this.nextSquadId += 1;
     this.squads.push(squad);
@@ -440,22 +477,27 @@ export class BattleScene {
     };
   }
 
-  private computeFormationSpawn(index: number, total: number, team: TeamId): Vec2 {
-    const rowCount = Math.max(1, Math.ceil(Math.sqrt(total)));
-    const colCount = Math.max(1, Math.ceil(total / rowCount));
+  private computeFormationSpawn(index: number, team: TeamId): Vec2 {
+    const spawnTeam = team === TeamId.Blue ? 'blue' : 'red';
+    const spawnCount = this.battleMap.getSpawnCount(spawnTeam);
+    const baseIndex = ((index % spawnCount) + spawnCount) % spawnCount;
+    const wave = Math.floor(index / spawnCount);
 
-    const row = index % rowCount;
-    const col = Math.floor(index / rowCount);
+    this.battleMap.getSpawn(spawnTeam, baseIndex, this.spawnTemp);
 
-    const yRange = WORLD_HEIGHT - 740;
-    const yStep = rowCount > 1 ? yRange / (rowCount - 1) : 0;
-    const y = 370 + row * yStep;
+    const localRow = wave % 3;
+    const localCol = Math.floor(wave / 3);
+    const rowOffset = (localRow - 1) * 94;
+    const dir = team === TeamId.Blue ? 1 : -1;
+    const colOffset = localCol * 106 * dir;
 
-    const xSpacing = colCount > 1 ? 155 : 0;
-    const xOffset = col * xSpacing;
+    this.spawnTemp.x += colOffset;
+    this.spawnTemp.y += rowOffset;
+    this.spawnTemp.x = Math.max(56, Math.min(this.worldBounds.width - 56, this.spawnTemp.x));
+    this.spawnTemp.y = Math.max(56, Math.min(this.worldBounds.height - 56, this.spawnTemp.y));
+    this.battleMap.pushOutOfObstacles(this.spawnTemp, 18);
 
-    const x = team === TeamId.Blue ? 620 + xOffset : WORLD_WIDTH - 620 - xOffset;
-    return new Vec2(x, y);
+    return this.spawnTemp.clone();
   }
 
   private bindInput(): void {
@@ -815,7 +857,15 @@ export class BattleScene {
     this.collectAliveSoldiers();
     this.rebuildUnitGrid();
 
-    this.rangedSystem.update(dt, this.squads, this.aliveSoldiers, this.unitGrid, this.projectileSystem, this.gameEvents);
+    this.rangedSystem.update(
+      dt,
+      this.squads,
+      this.aliveSoldiers,
+      this.unitGrid,
+      this.projectileSystem,
+      this.gameEvents,
+      this.terrainMods,
+    );
     this.combat.update(dt, this.aliveSoldiers, this.unitGrid, this.gameEvents);
     this.projectileSystem.update(dt, this.aliveSoldiers, this.unitGrid, this.gameEvents);
 
@@ -832,6 +882,8 @@ export class BattleScene {
       world: this.worldBounds,
       squads: this.squads,
       objective: this.objectiveManager.getTacticalState(),
+      mapState: this.battleMap,
+      navGrid: this.navGrid,
     });
 
     const playerRemaining = this.countTeamAlive(TeamId.Blue);
@@ -986,7 +1038,7 @@ export class BattleScene {
 
     this.objectiveManager.getMinimapMarkers(this.minimapMarkers);
     if (this.showMinimap) {
-      this.minimap.update(this.squads, this.aliveSoldiers, this.minimapMarkers);
+      this.minimap.update(this.squads, this.aliveSoldiers, this.minimapMarkers, this.battleMap);
     }
   }
 

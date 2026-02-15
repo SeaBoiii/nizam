@@ -4,6 +4,7 @@ import type { GameEvents } from '../events/GameEvents';
 import type { Soldier } from '../Soldier';
 import type { Squad } from '../Squad';
 import { canSquadFireRanged } from '../orders/RangedOrders';
+import { TerrainMods } from '../rules/TerrainMods';
 import type { SpatialHash } from '../SpatialHash';
 import { ProjectileSystem } from './ProjectileSystem';
 
@@ -18,6 +19,7 @@ export class RangedSystem {
     spatialGrid: SpatialHash,
     projectileSystem: ProjectileSystem,
     events: GameEvents,
+    terrainMods: TerrainMods | null = null,
   ): void {
     for (let squadIndex = 0; squadIndex < squads.length; squadIndex += 1) {
       const squad = squads[squadIndex];
@@ -36,7 +38,7 @@ export class RangedSystem {
           unit.rangedCooldown = Math.max(0, unit.rangedCooldown - dt);
         }
 
-        const range = unit.baseStats.rangedRange;
+        const range = unit.baseStats.rangedRange * (terrainMods ? terrainMods.getRangedRangeMult(unit.position) : 1);
         if (range <= 0 || unit.rangedCooldown > 0) {
           continue;
         }
@@ -54,7 +56,10 @@ export class RangedSystem {
         }
 
         const perkMods = unit.squad.perkMods;
-        const projectileSpeed = unit.baseStats.projectileSpeed * Math.max(0.2, perkMods.projectileSpeedMult);
+        const projectileSpeed =
+          unit.baseStats.projectileSpeed *
+          Math.max(0.2, perkMods.projectileSpeedMult) *
+          (terrainMods ? terrainMods.getProjectileSpeedMult(unit.position) : 1);
         if (projectileSpeed <= 0.0001) {
           continue;
         }
@@ -77,7 +82,13 @@ export class RangedSystem {
         dirX *= invDirLen;
         dirY *= invDirLen;
 
-        const accuracy = clamp(unit.baseStats.accuracy + perkMods.rangedAccuracyAdd, 0, 1);
+        const accuracy = clamp(
+          unit.baseStats.accuracy +
+            perkMods.rangedAccuracyAdd +
+            (terrainMods ? terrainMods.getRangedAccuracyAdd(unit.position, target.position) : 0),
+          0,
+          1,
+        );
         let spread = ARCHER_BASE_SPREAD_RADIANS * (1 - accuracy);
         if (unit.velocity.lenSq() > ARCHER_MOVING_SPEED_THRESHOLD * ARCHER_MOVING_SPEED_THRESHOLD) {
           spread *= ARCHER_MOVING_SPREAD_MULTIPLIER;

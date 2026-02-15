@@ -6,6 +6,7 @@ import type { BattleObjectiveType } from '../sim/objectives/ObjectiveTypes';
 export interface BattleScenario {
   nodeId: string;
   nodeType: NodeType;
+  mapId: string;
   objectiveType: BattleObjectiveType;
   captureSpeedMultiplier: number;
   holdoutDurationSeconds?: number;

@@ -1,0 +1,74 @@
+{
+  "version": "maps_v1",
+  "maps": [
+    {
+      "id": "open_field",
+      "name": "Open Field",
+      "size": { "w": 2200, "h": 1400 },
+      "spawns": {
+        "blue": [{ "x": 350, "y": 700 }, { "x": 420, "y": 520 }, { "x": 420, "y": 880 }],
+        "red": [{ "x": 1850, "y": 700 }, { "x": 1780, "y": 520 }, { "x": 1780, "y": 880 }]
+      },
+      "objectives": {
+        "capturePoint": { "x": 1100, "y": 700, "radius": 170 },
+        "exitZone": { "x": 2030, "y": 700, "radius": 160 }
+      },
+      "terrain": [
+        { "type": "OBSTACLE_RECT", "x": 980, "y": 350, "w": 140, "h": 210 },
+        { "type": "OBSTACLE_RECT", "x": 1120, "y": 860, "w": 120, "h": 190 },
+        { "type": "FOREST_RECT", "x": 720, "y": 930, "w": 360, "h": 250 },
+        { "type": "FOREST_RECT", "x": 1410, "y": 210, "w": 290, "h": 220 },
+        { "type": "HILL_RECT", "x": 1330, "y": 460, "w": 300, "h": 220 }
+      ]
+    },
+    {
+      "id": "bridge_crossing",
+      "name": "Bridge Crossing",
+      "size": { "w": 2200, "h": 1400 },
+      "spawns": {
+        "blue": [{ "x": 300, "y": 700 }, { "x": 360, "y": 540 }, { "x": 360, "y": 860 }],
+        "red": [{ "x": 1900, "y": 700 }, { "x": 1840, "y": 540 }, { "x": 1840, "y": 860 }]
+      },
+      "objectives": {
+        "capturePoint": { "x": 1100, "y": 700, "radius": 155 },
+        "exitZone": { "x": 2020, "y": 700, "radius": 150 }
+      },
+      "terrain": [
+        { "type": "OBSTACLE_RECT", "x": 940, "y": 0, "w": 320, "h": 520 },
+        { "type": "OBSTACLE_RECT", "x": 940, "y": 650, "w": 320, "h": 750 },
+        { "type": "OBSTACLE_RECT", "x": 1050, "y": 520, "w": 100, "h": 130 },
+        { "type": "FOREST_RECT", "x": 520, "y": 220, "w": 280, "h": 220 },
+        { "type": "FOREST_RECT", "x": 1440, "y": 960, "w": 260, "h": 220 },
+        { "type": "HILL_RECT", "x": 760, "y": 980, "w": 240, "h": 170 }
+      ]
+    },
+    {
+      "id": "forest_pass",
+      "name": "Forest Pass",
+      "size": { "w": 2200, "h": 1400 },
+      "spawns": {
+        "blue": [{ "x": 330, "y": 700 }, { "x": 380, "y": 550 }, { "x": 380, "y": 850 }],
+        "red": [{ "x": 1880, "y": 700 }, { "x": 1820, "y": 550 }, { "x": 1820, "y": 850 }]
+      },
+      "objectives": {
+        "capturePoint": { "x": 1110, "y": 700, "radius": 165 },
+        "exitZone": { "x": 2020, "y": 700, "radius": 160 }
+      },
+      "terrain": [
+        { "type": "OBSTACLE_RECT", "x": 850, "y": 0, "w": 230, "h": 560 },
+        { "type": "OBSTACLE_RECT", "x": 850, "y": 820, "w": 230, "h": 580 },
+        { "type": "OBSTACLE_RECT", "x": 1240, "y": 0, "w": 230, "h": 560 },
+        { "type": "OBSTACLE_RECT", "x": 1240, "y": 820, "w": 230, "h": 580 },
+        { "type": "FOREST_RECT", "x": 560, "y": 230, "w": 280, "h": 360 },
+        { "type": "FOREST_RECT", "x": 1460, "y": 790, "w": 300, "h": 360 },
+        { "type": "FOREST_RECT", "x": 1010, "y": 590, "w": 330, "h": 230 },
+        { "type": "HILL_RECT", "x": 1500, "y": 420, "w": 250, "h": 200 }
+      ]
+    }
+  ],
+  "terrainRules": {
+    "forest": { "moveSpeedMult": 0.82, "rangedAccuracyAdd": -0.06, "projectileSpeedMult": 0.95 },
+    "hill": { "rangedRangeMult": 1.1, "rangedAccuracyAdd": 0.06 }
+  },
+  "nav": { "cellSize": 40 }
+}

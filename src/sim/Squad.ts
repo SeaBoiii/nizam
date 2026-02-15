@@ -3,11 +3,15 @@ import { clamp, damp, rotateTowardAngle, shortestAngleDelta } from '../utils/mat
 import { Vec2 } from '../utils/vec2';
 import type { GameEvents } from './events/GameEvents';
 import { computeSlotLocal, estimateFormationRadius } from './Formation';
+import { BattleMapState } from './map/MapState';
+import { FlowField } from './nav/FlowField';
+import { NavGrid } from './nav/NavGrid';
 import { skirmishThreatRange } from './orders/RangedOrders';
 import { DEFAULT_PERK_MODS, type CombinedPerkMods } from './rules/PerkMods';
+import { TerrainMods } from './rules/TerrainMods';
 import type { Waypoint } from './Orders';
 import { SKIRMISH_ADVANCE_SPEED_FACTOR, SKIRMISH_RETREAT_DISTANCE, SKIRMISH_RETREAT_SPEED_FACTOR } from './rules/Constants';
-import { Soldier } from './Soldier';
+import { Soldier, SOLDIER_RADIUS } from './Soldier';
 import { TeamId, type FormationType, type OrderMode, type WorldBounds } from './types';
 import type { UnitArchetype } from './types/UnitArchetype';
 
@@ -36,6 +40,9 @@ interface SquadOptions {
   commandable?: boolean;
   perkMods?: Readonly<CombinedPerkMods>;
   events?: GameEvents;
+  flowField?: FlowField;
+  navGrid?: NavGrid;
+  terrainMods?: TerrainMods;
 }
 
 export interface SquadUpdateContext {
@@ -44,6 +51,9 @@ export interface SquadUpdateContext {
   world: WorldBounds;
   objectivePosition: Vec2;
   allSquads: readonly Squad[];
+  mapState: BattleMapState;
+  navGrid: NavGrid;
+  terrainMods: TerrainMods;
 }
 
 export class Squad {
@@ -56,6 +66,9 @@ export class Squad {
   readonly commandable: boolean;
   readonly perkMods: Readonly<CombinedPerkMods>;
   readonly events: GameEvents | null;
+  readonly flowField: FlowField | null;
+  readonly navGrid: NavGrid | null;
+  readonly terrainMods: TerrainMods | null;
   readonly anchor: Vec2;
   readonly anchorVelocity = new Vec2();
   readonly holdAnchor = new Vec2();
@@ -76,6 +89,7 @@ export class Squad {
   private readonly slotTemp = new Vec2();
   private readonly worldSlotTemp = new Vec2();
   private readonly steerTargetTemp = new Vec2();
+  private readonly flowDirTemp = new Vec2();
   private readonly selectionOutline: Graphics;
   private readonly label: Text;
 
@@ -91,6 +105,9 @@ export class Squad {
     this.commandable = options.commandable ?? true;
     this.perkMods = options.perkMods ?? DEFAULT_PERK_MODS;
     this.events = options.events ?? null;
+    this.flowField = options.flowField ?? null;
+    this.navGrid = options.navGrid ?? null;
+    this.terrainMods = options.terrainMods ?? null;
 
     this.selectionOutline = new Graphics();
     this.selectionOutline.visible = false;
@@ -255,6 +272,9 @@ export class Squad {
     this.updateAnchorMotion(context);
     this.anchor.x = clamp(this.anchor.x, EDGE_PADDING, context.world.width - EDGE_PADDING);
     this.anchor.y = clamp(this.anchor.y, EDGE_PADDING, context.world.height - EDGE_PADDING);
+    if (context.mapState.pushOutOfObstacles(this.anchor, 16)) {
+      this.anchorVelocity.scale(0.72);
+    }
 
     this.updateFacing(context.dt);
     this.updateSoldiers(context);
@@ -330,12 +350,12 @@ export class Squad {
     switch (this.order) {
       case 'hold': {
         this.chargeTarget = null;
-        this.driveAnchorToward(this.holdAnchor, context.dt, this.perkedMoveSpeed(this.archetype.stats.moveSpeed * 0.35));
+        this.driveAnchorToward(this.holdAnchor, context, this.perkedMoveSpeed(this.archetype.stats.moveSpeed * 0.35));
         break;
       }
       case 'volley': {
         this.chargeTarget = null;
-        this.driveAnchorToward(this.holdAnchor, context.dt, this.perkedMoveSpeed(this.archetype.stats.moveSpeed * 0.3));
+        this.driveAnchorToward(this.holdAnchor, context, this.perkedMoveSpeed(this.archetype.stats.moveSpeed * 0.3));
         break;
       }
       case 'skirmish': {
@@ -350,7 +370,7 @@ export class Squad {
         break;
       }
       case 'charge': {
-        this.runCharge(context.dt, context.allSquads);
+        this.runCharge(context);
         break;
       }
     }
@@ -383,7 +403,7 @@ export class Squad {
       this.order === 'rout'
         ? this.perkedMoveSpeed(this.archetype.stats.moveSpeed * ANCHOR_ROUT_SPEED_BONUS)
         : this.perkedMoveSpeed(this.archetype.stats.moveSpeed);
-    this.driveAnchorToward(waypoint.position, context.dt, maxSpeed);
+    this.driveAnchorToward(waypoint.position, context, maxSpeed);
 
     const distSq = this.anchor.distanceSqTo(waypoint.position);
     if (distSq <= ARRIVE_RADIUS * ARRIVE_RADIUS) {
@@ -409,8 +429,8 @@ export class Squad {
     }
   }
 
-  private runCharge(dt: number, allSquads: readonly Squad[]): void {
-    const target = this.findNearestEnemy(allSquads);
+  private runCharge(context: SquadUpdateContext): void {
+    const target = this.findNearestEnemy(context.allSquads);
     this.chargeTarget = target;
 
     if (target === null) {
@@ -421,7 +441,7 @@ export class Squad {
     const toTargetX = target.anchor.x - this.anchor.x;
     const toTargetY = target.anchor.y - this.anchor.y;
     this.desiredFacing = Math.atan2(toTargetY, toTargetX);
-    this.driveAnchorToward(target.anchor, dt, this.perkedMoveSpeed(this.archetype.stats.moveSpeed * ANCHOR_CHARGE_SPEED_BONUS));
+    this.driveAnchorToward(target.anchor, context, this.perkedMoveSpeed(this.archetype.stats.moveSpeed * ANCHOR_CHARGE_SPEED_BONUS));
   }
 
   private runSkirmish(context: SquadUpdateContext): void {
@@ -430,11 +450,7 @@ export class Squad {
 
     const moveSpeed = this.perkedMoveSpeed(this.archetype.stats.moveSpeed);
     if (target === null) {
-      this.driveAnchorToward(
-        context.objectivePosition,
-        context.dt,
-        moveSpeed * SKIRMISH_ADVANCE_SPEED_FACTOR,
-      );
+      this.driveAnchorToward(context.objectivePosition, context, moveSpeed * SKIRMISH_ADVANCE_SPEED_FACTOR);
       return;
     }
 
@@ -456,15 +472,11 @@ export class Squad {
         this.anchor.x - toTargetX * invDist * SKIRMISH_RETREAT_DISTANCE,
         this.anchor.y - toTargetY * invDist * SKIRMISH_RETREAT_DISTANCE,
       );
-      this.driveAnchorToward(this.steerTargetTemp, context.dt, moveSpeed * SKIRMISH_RETREAT_SPEED_FACTOR);
+      this.driveAnchorToward(this.steerTargetTemp, context, moveSpeed * SKIRMISH_RETREAT_SPEED_FACTOR);
       return;
     }
 
-    this.driveAnchorToward(
-      context.objectivePosition,
-      context.dt,
-      moveSpeed * SKIRMISH_ADVANCE_SPEED_FACTOR,
-    );
+    this.driveAnchorToward(context.objectivePosition, context, moveSpeed * SKIRMISH_ADVANCE_SPEED_FACTOR);
   }
 
   private findNearestEnemy(allSquads: readonly Squad[]): Squad | null {
@@ -509,10 +521,24 @@ export class Squad {
     return nearest;
   }
 
-  private driveAnchorToward(target: Vec2, dt: number, maxSpeed: number): void {
+  private driveAnchorToward(target: Vec2, context: SquadUpdateContext, maxSpeedBase: number): void {
+    const dt = context.dt;
     const dx = target.x - this.anchor.x;
     const dy = target.y - this.anchor.y;
     const dist = Math.hypot(dx, dy);
+
+    const terrainSpeedMult = this.terrainMods ? this.terrainMods.getMoveSpeedMult(this.anchor) : 1;
+    const maxSpeed = maxSpeedBase * terrainSpeedMult;
+
+    let flowX = 0;
+    let flowY = 0;
+    if (this.flowField !== null && this.navGrid !== null) {
+      this.flowField.updateTarget(target.x, target.y, context.simTime);
+      if (this.flowField.getDirectionAt(this.anchor.x, this.anchor.y, this.flowDirTemp)) {
+        flowX = this.flowDirTemp.x;
+        flowY = this.flowDirTemp.y;
+      }
+    }
 
     let desiredVx = 0;
     let desiredVy = 0;
@@ -521,8 +547,23 @@ export class Squad {
       if (dist < ARRIVE_RADIUS * 3) {
         speed *= dist / (ARRIVE_RADIUS * 3);
       }
-      desiredVx = (dx / dist) * speed;
-      desiredVy = (dy / dist) * speed;
+      let dirX = dx / dist;
+      let dirY = dy / dist;
+
+      if (flowX * flowX + flowY * flowY > 0.0001) {
+        const lineBlocked = context.mapState.isLineBlocked(this.anchor.x, this.anchor.y, target.x, target.y);
+        const flowWeight = lineBlocked ? 0.7 : 0.32;
+        dirX = dirX * (1 - flowWeight) + flowX * flowWeight;
+        dirY = dirY * (1 - flowWeight) + flowY * flowWeight;
+        const dirLen = Math.hypot(dirX, dirY);
+        if (dirLen > 0.0001) {
+          dirX /= dirLen;
+          dirY /= dirLen;
+        }
+      }
+
+      desiredVx = dirX * speed;
+      desiredVy = dirY * speed;
     }
 
     let steerX = desiredVx - this.anchorVelocity.x;
@@ -588,6 +629,12 @@ export class Squad {
       this.getSlotWorldForIndex(soldier.slotIndex, this.worldSlotTemp, slotScale);
       let targetX = this.worldSlotTemp.x;
       let targetY = this.worldSlotTemp.y;
+      let flowX = 0;
+      let flowY = 0;
+      if (this.flowField !== null && this.flowField.getDirectionAt(soldier.position.x, soldier.position.y, this.flowDirTemp)) {
+        flowX = this.flowDirTemp.x;
+        flowY = this.flowDirTemp.y;
+      }
 
       if (chargeOrder) {
         const enemySquad = this.findNearestEnemyToPoint(soldier.position, context.allSquads) ?? this.chargeTarget;
@@ -607,6 +654,15 @@ export class Squad {
 
         targetX += Math.sin(context.simTime * 4 + soldier.jitterPhase) * 3;
         targetY += Math.cos(context.simTime * 4 + soldier.jitterPhase * 1.37) * 3;
+      }
+
+      let lineBlockedToSlot = context.mapState.isBlocked(targetX, targetY, SOLDIER_RADIUS + 1);
+      if (!lineBlockedToSlot && ((i + Math.floor(context.simTime * 60)) & 3) === 0) {
+        lineBlockedToSlot = context.mapState.isLineBlocked(soldier.position.x, soldier.position.y, targetX, targetY);
+      }
+      if (lineBlockedToSlot && (flowX * flowX + flowY * flowY > 0.0001)) {
+        targetX += flowX * 28;
+        targetY += flowY * 28;
       }
 
       let separationX = 0;
@@ -639,6 +695,9 @@ export class Squad {
       const targetDist = Math.hypot(toTargetX, toTargetY);
 
       let moveSpeed = this.perkedMoveSpeed(soldier.baseStats.moveSpeed);
+      if (this.terrainMods !== null) {
+        moveSpeed *= this.terrainMods.getMoveSpeedMult(soldier.position);
+      }
       if (this.order === 'charge') {
         moveSpeed *= 1.1;
       } else if (this.order === 'rout') {
@@ -654,13 +713,25 @@ export class Squad {
         if (targetDist < 24) {
           desiredSpeed *= targetDist / 24;
         }
+        let dirX = toTargetX / targetDist;
+        let dirY = toTargetY / targetDist;
+        if (flowX * flowX + flowY * flowY > 0.0001) {
+          const flowWeight = lineBlockedToSlot ? 0.65 : 0.2;
+          dirX = dirX * (1 - flowWeight) + flowX * flowWeight;
+          dirY = dirY * (1 - flowWeight) + flowY * flowWeight;
+          const dirLen = Math.hypot(dirX, dirY);
+          if (dirLen > 0.0001) {
+            dirX /= dirLen;
+            dirY /= dirLen;
+          }
+        }
 
-        desiredVx = (toTargetX / targetDist) * desiredSpeed;
-        desiredVy = (toTargetY / targetDist) * desiredSpeed;
+        desiredVx = dirX * desiredSpeed;
+        desiredVy = dirY * desiredSpeed;
       }
 
-      let accelX = desiredVx - soldier.velocity.x + separationX * separationWeight;
-      let accelY = desiredVy - soldier.velocity.y + separationY * separationWeight;
+      let accelX = desiredVx - soldier.velocity.x + separationX * separationWeight + flowX * 24;
+      let accelY = desiredVy - soldier.velocity.y + separationY * separationWeight + flowY * 24;
       const accelLen = Math.hypot(accelX, accelY);
       const accelLimit = (SOLDIER_ACCEL_BASE / soldier.mass) * cohesionMult * context.dt;
       if (accelLen > accelLimit && accelLen > 0.0001) {
@@ -681,6 +752,9 @@ export class Squad {
       soldier.position.y += soldier.velocity.y * context.dt;
       soldier.position.x = clamp(soldier.position.x, EDGE_PADDING, context.world.width - EDGE_PADDING);
       soldier.position.y = clamp(soldier.position.y, EDGE_PADDING, context.world.height - EDGE_PADDING);
+      if (context.mapState.pushOutOfObstacles(soldier.position, SOLDIER_RADIUS + 0.3)) {
+        soldier.velocity.scale(0.7);
+      }
 
       soldier.syncGraphics();
     }

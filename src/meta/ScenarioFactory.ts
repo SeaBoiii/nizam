@@ -67,6 +67,29 @@ function createEnemySquad(id: string, archetypeId: string, size: number, tier: n
   };
 }
 
+function weightedMapId(rng: SeededRng, entries: ReadonlyArray<{ id: string; weight: number }>, fallbackId: string): string {
+  if (entries.length === 0) {
+    return fallbackId;
+  }
+  let total = 0;
+  for (let i = 0; i < entries.length; i += 1) {
+    total += Math.max(0, entries[i].weight);
+  }
+  if (total <= 0.0001) {
+    return entries[rng.int(0, entries.length - 1)].id;
+  }
+
+  const roll = rng.range(0, total);
+  let acc = 0;
+  for (let i = 0; i < entries.length; i += 1) {
+    acc += Math.max(0, entries[i].weight);
+    if (roll <= acc) {
+      return entries[i].id;
+    }
+  }
+  return entries[entries.length - 1].id;
+}
+
 function sampleReward(
   rng: SeededRng,
   range: { min: number; max: number },
@@ -154,6 +177,35 @@ function resolveEnemySquads(
   return squads;
 }
 
+function resolveMapId(nodeType: NodeType, runState: RunState, rng: SeededRng): string {
+  const allMaps = contentManager.getAllMaps();
+  const fallbackMapId = allMaps.length > 0 ? allMaps[0].id : 'open_field';
+  const scenarios = contentManager.getScenarioTuning();
+  const poolBuckets =
+    scenarios.mapPoolsByNodeType[nodeType === 'BOSS' ? 'BOSS' : nodeType === 'ELITE' ? 'ELITE' : 'BATTLE'];
+  const bucket = pickTemplateBucket(runState.step, poolBuckets);
+  if (!bucket || bucket.maps.length === 0) {
+    return fallbackMapId;
+  }
+
+  const mapIds = new Set<string>();
+  for (let i = 0; i < allMaps.length; i += 1) {
+    mapIds.add(allMaps[i].id);
+  }
+
+  const validEntries: Array<{ id: string; weight: number }> = [];
+  for (let i = 0; i < bucket.maps.length; i += 1) {
+    const entry = bucket.maps[i];
+    if (mapIds.has(entry.id)) {
+      validEntries.push(entry);
+    }
+  }
+  if (validEntries.length === 0) {
+    return fallbackMapId;
+  }
+  return weightedMapId(rng, validEntries, fallbackMapId);
+}
+
 export function createScenario(
   nodeId: string,
   nodeType: NodeType,
@@ -168,6 +220,7 @@ export function createScenario(
   const difficultyTier = Math.max(1, runState.difficultyTier);
   const objectiveType = selectObjectiveType(nodeId, nodeType, runState);
   const selectedObjectiveSeed = objectiveSeed(nodeId, nodeType, runState);
+  const mapId = resolveMapId(nodeType, runState, rng);
   const enemySquads = resolveEnemySquads(
     nodeType,
     objectiveType,
@@ -192,6 +245,7 @@ export function createScenario(
   return {
     nodeId,
     nodeType,
+    mapId,
     objectiveType,
     captureSpeedMultiplier: objectives.capture.speedMultiplierByNodeType[nodeType === 'ELITE' ? 'ELITE' : nodeType === 'BOSS' ? 'BOSS' : 'BATTLE'],
     holdoutDurationSeconds,

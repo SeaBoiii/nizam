@@ -6,6 +6,58 @@
     "HOLDOUT": 0.72,
     "ESCORT": 0.9
   },
+  "mapPoolsByNodeType": {
+    "BATTLE": [
+      {
+        "depthMin": 0,
+        "depthMax": 4,
+        "maps": [
+          { "id": "open_field", "weight": 0.65 },
+          { "id": "bridge_crossing", "weight": 0.2 },
+          { "id": "forest_pass", "weight": 0.15 }
+        ]
+      },
+      {
+        "depthMin": 5,
+        "depthMax": 9,
+        "maps": [
+          { "id": "open_field", "weight": 0.35 },
+          { "id": "bridge_crossing", "weight": 0.35 },
+          { "id": "forest_pass", "weight": 0.3 }
+        ]
+      },
+      {
+        "depthMin": 10,
+        "depthMax": 99,
+        "maps": [
+          { "id": "open_field", "weight": 0.2 },
+          { "id": "bridge_crossing", "weight": 0.45 },
+          { "id": "forest_pass", "weight": 0.35 }
+        ]
+      }
+    ],
+    "ELITE": [
+      {
+        "depthMin": 0,
+        "depthMax": 99,
+        "maps": [
+          { "id": "open_field", "weight": 0.3 },
+          { "id": "bridge_crossing", "weight": 0.35 },
+          { "id": "forest_pass", "weight": 0.35 }
+        ]
+      }
+    ],
+    "BOSS": [
+      {
+        "depthMin": 0,
+        "depthMax": 99,
+        "maps": [
+          { "id": "bridge_crossing", "weight": 0.5 },
+          { "id": "forest_pass", "weight": 0.5 }
+        ]
+      }
+    ]
+  },
   "templatesByNodeType": {
     "BATTLE": [
       {

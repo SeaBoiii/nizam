@@ -1,4 +1,6 @@
 import { Vec2 } from '../../utils/vec2';
+import { BattleMapState } from '../map/MapState';
+import { NavGrid } from '../nav/NavGrid';
 import { TeamId, type WorldBounds } from '../types';
 import type { Squad } from '../Squad';
 import type { ObjectiveTacticalState } from '../objectives/IObjective';
@@ -20,6 +22,8 @@ interface AIDirectorContext {
   world: WorldBounds;
   squads: readonly Squad[];
   objective: ObjectiveTacticalState;
+  mapState: BattleMapState;
+  navGrid: NavGrid;
 }
 
 export class AIDirector {
@@ -31,6 +35,7 @@ export class AIDirector {
   private readonly archerGuards: Squad[] = [];
   private readonly flankPoint = new Vec2();
   private readonly protectPoint = new Vec2();
+  private readonly hillPoint = new Vec2();
   private readonly commandMemory = new Map<number, string>();
 
   update(dt: number, context: AIDirectorContext): void {
@@ -137,6 +142,20 @@ export class AIDirector {
     }
 
     if (role === 'ARCHER') {
+      const foundHill = context.mapState.getNearestHillCenter(squad.anchor, this.hillPoint);
+      if (
+        foundHill &&
+        !context.mapState.isInForest(squad.anchor.x, squad.anchor.y) &&
+        distanceSq(squad.anchor, this.hillPoint) > 110 * 110
+      ) {
+        this.commandMove(squad, this.hillPoint, this.angleTo(nearestEnemy.anchor, this.hillPoint));
+        return;
+      }
+      if (context.mapState.isInForest(squad.anchor.x, squad.anchor.y) && foundHill) {
+        this.commandMove(squad, this.hillPoint, this.angleTo(nearestEnemy.anchor, this.hillPoint));
+        return;
+      }
+
       const maxRange = Math.max(120, squad.archetype.stats.rangedRange);
       if (
         this.isThreatened(squad, this.playerSquads, maxRange * 0.6) ||
@@ -150,8 +169,21 @@ export class AIDirector {
     }
 
     computeFlankPoint(nearestEnemy, context.world, this.flankPoint);
+    const flankPath = context.navGrid.estimatePathDistance(
+      squad.anchor.x,
+      squad.anchor.y,
+      this.flankPoint.x,
+      this.flankPoint.y,
+      120,
+    );
+    const direct = Math.hypot(this.flankPoint.x - squad.anchor.x, this.flankPoint.y - squad.anchor.y);
+    if (flankPath > direct * 1.9) {
+      this.commandMove(squad, objectivePoint, this.angleTo(nearestEnemy.anchor, objectivePoint));
+      return;
+    }
+
     this.commandMove(squad, this.flankPoint, this.angleTo(nearestEnemy.anchor, this.flankPoint));
-    if (distanceSq(squad.anchor, nearestEnemy.anchor) < 240 * 240) {
+    if (distanceSq(squad.anchor, nearestEnemy.anchor) < 240 * 240 && !context.mapState.isInForest(squad.anchor.x, squad.anchor.y)) {
       this.commandCharge(squad);
     }
   }
@@ -173,6 +205,11 @@ export class AIDirector {
     }
 
     if (role === 'ARCHER') {
+      const foundHill = context.mapState.getNearestHillCenter(squad.anchor, this.hillPoint);
+      if (foundHill && distanceSq(squad.anchor, this.hillPoint) > 120 * 120) {
+        this.commandMove(squad, this.hillPoint, this.angleTo(commanderTarget, this.hillPoint));
+        return;
+      }
       const maxRange = Math.max(120, squad.archetype.stats.rangedRange);
       if (
         this.isThreatened(squad, this.playerSquads, maxRange * 0.55) ||
@@ -203,6 +240,19 @@ export class AIDirector {
 
     if (role === 'CAVALRY') {
       computeFlankPoint(nearestEnemy, context.world, this.flankPoint, 190);
+      const flankPath = context.navGrid.estimatePathDistance(
+        squad.anchor.x,
+        squad.anchor.y,
+        this.flankPoint.x,
+        this.flankPoint.y,
+        120,
+      );
+      const direct = Math.hypot(this.flankPoint.x - squad.anchor.x, this.flankPoint.y - squad.anchor.y);
+      if (flankPath > direct * 2) {
+        this.commandMove(squad, commanderTarget, this.angleTo(commanderTarget, squad.anchor));
+        this.commandCharge(squad);
+        return;
+      }
       this.commandMove(squad, this.flankPoint, this.angleTo(commanderTarget, this.flankPoint));
       if (distanceSq(squad.anchor, commanderTarget) < 260 * 260) {
         this.commandCharge(squad);
@@ -221,6 +271,11 @@ export class AIDirector {
     context: AIDirectorContext,
   ): void {
     if (role === 'ARCHER') {
+      const foundHill = context.mapState.getNearestHillCenter(squad.anchor, this.hillPoint);
+      if (foundHill && !context.mapState.isInForest(squad.anchor.x, squad.anchor.y) && distanceSq(squad.anchor, this.hillPoint) > 130 * 130) {
+        this.commandMove(squad, this.hillPoint, this.angleTo(nearestEnemy.anchor, this.hillPoint));
+        return;
+      }
       const maxRange = Math.max(120, squad.archetype.stats.rangedRange);
       if (
         this.isThreatened(squad, this.playerSquads, maxRange * 0.55) ||
@@ -235,6 +290,19 @@ export class AIDirector {
 
     if (role === 'CAVALRY') {
       computeFlankPoint(nearestEnemy, context.world, this.flankPoint);
+      const flankPath = context.navGrid.estimatePathDistance(
+        squad.anchor.x,
+        squad.anchor.y,
+        this.flankPoint.x,
+        this.flankPoint.y,
+        120,
+      );
+      const direct = Math.hypot(this.flankPoint.x - squad.anchor.x, this.flankPoint.y - squad.anchor.y);
+      if (flankPath > direct * 1.95) {
+        this.commandMove(squad, nearestEnemy.anchor, this.angleTo(nearestEnemy.anchor, squad.anchor));
+        this.commandCharge(squad);
+        return;
+      }
       this.commandMove(squad, this.flankPoint, this.angleTo(nearestEnemy.anchor, this.flankPoint));
       this.commandCharge(squad);
       return;
@@ -256,6 +324,11 @@ export class AIDirector {
     const targetPoint = caravan !== null && caravan.alive ? caravan.position : nearestEnemy.anchor;
 
     if (role === 'ARCHER') {
+      const foundHill = context.mapState.getNearestHillCenter(squad.anchor, this.hillPoint);
+      if (foundHill && distanceSq(squad.anchor, this.hillPoint) > 110 * 110) {
+        this.commandMove(squad, this.hillPoint, this.angleTo(targetPoint, this.hillPoint));
+        return;
+      }
       const maxRange = Math.max(120, squad.archetype.stats.rangedRange);
       if (
         this.isThreatened(squad, this.playerSquads, maxRange * 0.55) ||
@@ -282,6 +355,19 @@ export class AIDirector {
         }
         this.flankPoint.x = Math.max(44, Math.min(context.world.width - 44, this.flankPoint.x));
         this.flankPoint.y = Math.max(44, Math.min(context.world.height - 44, this.flankPoint.y));
+        const flankPath = context.navGrid.estimatePathDistance(
+          squad.anchor.x,
+          squad.anchor.y,
+          this.flankPoint.x,
+          this.flankPoint.y,
+          120,
+        );
+        const direct = Math.hypot(this.flankPoint.x - squad.anchor.x, this.flankPoint.y - squad.anchor.y);
+        if (flankPath > direct * 1.9) {
+          this.commandMove(squad, targetPoint, this.angleTo(targetPoint, squad.anchor));
+          this.commandCharge(squad);
+          return;
+        }
         this.commandMove(squad, this.flankPoint, this.angleTo(targetPoint, this.flankPoint));
         this.commandCharge(squad);
         return;

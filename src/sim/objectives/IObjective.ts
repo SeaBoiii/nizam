@@ -7,6 +7,7 @@ import type { TeamId, WorldBounds } from '../types';
 import type { UnitArchetype } from '../types/UnitArchetype';
 import type { Vec2 } from '../../utils/vec2';
 import type { BattleObjectiveType } from './ObjectiveTypes';
+import type { BattleMapState } from '../map/MapState';
 
 export interface ObjectiveHUDState {
   title: string;
@@ -51,6 +52,7 @@ export interface ObjectiveSpawnSquadRequest {
 export interface ObjectiveWorld {
   scenario: BattleScenario;
   bounds: WorldBounds;
+  mapState: BattleMapState;
   objectiveCenter: Vec2;
   simTime: number;
   squads: Squad[];

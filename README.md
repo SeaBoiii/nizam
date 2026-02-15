@@ -75,6 +75,7 @@ Gameplay tuning is loaded from JSON files at startup:
 - `public/content/objectives.json`
 - `public/content/nodes.json`
 - `public/content/scenarios.json`
+- `public/content/maps.json`
 
 The loader uses Vite base-aware paths:
 
@@ -83,6 +84,23 @@ The loader uses Vite base-aware paths:
 So GitHub Pages pathing under `/nizam/` works correctly.
 
 If a content file is missing or invalid, the game falls back to built-in defaults and logs errors to console. In dev mode, a small HUD warning is shown when fallback is active.
+
+## Terrain + Chokepoints (Sprint 9A)
+
+- Battles now load handcrafted maps from `public/content/maps.json`.
+- Terrain types:
+  - `OBSTACLE_RECT`: impassable blocks (units route around, cannot pass through).
+  - `FOREST_RECT`: movement slow and ranged accuracy penalty for shooters inside forest.
+  - `HILL_RECT`: ranged range and accuracy bonus for shooters on hill tiles.
+- Navigation uses a lightweight nav grid + flow-field steering:
+  - squads and units route around obstacles/chokepoints
+  - no per-unit A* pathfinding
+- Included maps:
+  - `open_field`
+  - `bridge_crossing`
+  - `forest_pass`
+- Map selection is deterministic per node and seed, using scenario content pools in `public/content/scenarios.json`.
+- Terrain overlays are rendered in-battle and minimap shows obstacle silhouettes.
 
 ## Campaign loop
 

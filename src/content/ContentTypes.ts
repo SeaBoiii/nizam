@@ -222,7 +222,79 @@ export interface ScenarioDepthBucketContent {
 export interface ScenariosContent {
   contentVersion: string;
   objectivePowerScale: Record<BattleObjectiveType, number>;
+  mapPoolsByNodeType: Record<'BATTLE' | 'ELITE' | 'BOSS', ScenarioDepthBucketMapPoolContent[]>;
   templatesByNodeType: Record<'BATTLE' | 'ELITE' | 'BOSS', ScenarioDepthBucketContent[]>;
+}
+
+export type MapTerrainEntryType = 'OBSTACLE_RECT' | 'FOREST_RECT' | 'HILL_RECT';
+
+export interface MapTerrainEntryContent {
+  type: MapTerrainEntryType;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface MapSpawnPointContent {
+  x: number;
+  y: number;
+}
+
+export interface MapObjectiveCircleContent {
+  x: number;
+  y: number;
+  radius: number;
+}
+
+export interface BattleMapContent {
+  id: string;
+  name: string;
+  size: {
+    w: number;
+    h: number;
+  };
+  spawns: {
+    blue: MapSpawnPointContent[];
+    red: MapSpawnPointContent[];
+  };
+  objectives: {
+    capturePoint: MapObjectiveCircleContent;
+    exitZone: MapObjectiveCircleContent;
+  };
+  terrain: MapTerrainEntryContent[];
+}
+
+export interface TerrainRulesContent {
+  forest: {
+    moveSpeedMult: number;
+    rangedAccuracyAdd: number;
+    projectileSpeedMult: number;
+  };
+  hill: {
+    rangedRangeMult: number;
+    rangedAccuracyAdd: number;
+  };
+}
+
+export interface MapsContent {
+  version: string;
+  maps: BattleMapContent[];
+  terrainRules: TerrainRulesContent;
+  nav: {
+    cellSize: number;
+  };
+}
+
+export interface ScenarioMapPoolEntryContent {
+  id: string;
+  weight: number;
+}
+
+export interface ScenarioDepthBucketMapPoolContent {
+  depthMin: number;
+  depthMax: number;
+  maps: ScenarioMapPoolEntryContent[];
 }
 
 export interface LoadedContent {
@@ -232,6 +304,7 @@ export interface LoadedContent {
   objectives: ObjectivesTuningContent;
   nodes: NodesTuningContent;
   scenarios: ScenariosContent;
+  maps: MapsContent;
 }
 
 export type ContentFileName = keyof LoadedContent;
