@@ -248,6 +248,65 @@ export const DEFAULT_UNITS_CONTENT: UnitsContent = {
         },
       },
     },
+    {
+      id: 'slingers',
+      name: 'Slingers',
+      recruitable: true,
+      tags: ['slinger', 'light'],
+      tiers: {
+        '1': {
+          hp: 70,
+          moveSpeed: 105,
+          attackDamage: 5,
+          attackRate: 1.6,
+          meleeRange: 12,
+          rangedDamage: 5,
+          rangedRange: 360,
+          projectileSpeed: 420,
+          projectileGravity: 520,
+          rangedCooldown: 0,
+          accuracy: 0.78,
+          armor: 1,
+          mass: 0.85,
+          chargePower: 1,
+          chargeMinSpeed: 999,
+        },
+        '2': {
+          hp: 79,
+          moveSpeed: 108,
+          attackDamage: 5.5,
+          attackRate: 1.62,
+          meleeRange: 12,
+          rangedDamage: 5.5,
+          rangedRange: 378,
+          projectileSpeed: 420,
+          projectileGravity: 520,
+          rangedCooldown: 0,
+          accuracy: 0.83,
+          armor: 1.1,
+          mass: 0.85,
+          chargePower: 1,
+          chargeMinSpeed: 999,
+        },
+        '3': {
+          hp: 88,
+          moveSpeed: 110,
+          attackDamage: 6,
+          attackRate: 1.64,
+          meleeRange: 12,
+          rangedDamage: 6,
+          rangedRange: 396,
+          projectileSpeed: 420,
+          projectileGravity: 520,
+          rangedCooldown: 0,
+          accuracy: 0.86,
+          armor: 1.2,
+          mass: 0.85,
+          chargePower: 1,
+          chargeMinSpeed: 999,
+        },
+      },
+    },
   ],
   startingArmy: {
     gold: 55,
@@ -279,6 +338,10 @@ export const DEFAULT_UPGRADES_CONTENT: UpgradePathsContent = {
       costByTier: { '2': 0, '3': 0 },
     },
     archers: {
+      nextTierByTier: { '1': 2, '2': 3 },
+      costByTier: { '2': 0, '3': 0 },
+    },
+    slingers: {
       nextTierByTier: { '1': 2, '2': 3 },
       costByTier: { '2': 0, '3': 0 },
     },
@@ -388,6 +451,16 @@ export const DEFAULT_PERKS_CONTENT: PerksContent = {
         fieldMedicRecruitsPerCasualty: 0.12,
       },
     },
+    {
+      id: 'stone_storm',
+      name: 'Stone Storm',
+      desc: 'Slingers fire faster and inflict stronger suppression.',
+      rarity: 'rare',
+      mods: {
+        rangedAttackRateMult: 1.08,
+        suppressionMult: 1.2,
+      },
+    },
   ],
 };
 
@@ -438,7 +511,7 @@ export const DEFAULT_OBJECTIVES_CONTENT: ObjectivesTuningContent = {
     waveRandomSizeMaxAdd: 4,
     waveSizePerDifficulty: 2,
     waveSizePerWave: 1,
-    waveArchetypes: ['infantry', 'spearmen', 'cavalry', 'archers'],
+    waveArchetypes: ['infantry', 'spearmen', 'cavalry', 'archers', 'slingers'],
   },
   escort: {
     timeLimitSeconds: 180,
@@ -460,6 +533,12 @@ export const DEFAULT_OBJECTIVES_CONTENT: ObjectivesTuningContent = {
     opposingProgressDrainFactor: 0.42,
     eliteDepthMin: 7,
     eliteChance: 0.38,
+  },
+  suppression: {
+    enabled: true,
+    stoneMoraleDamage: 2.5,
+    stoneMoraleDamageOnShieldFrontMult: 0.6,
+    maxSuppressionPerSecondPerSquad: 12,
   },
 };
 
@@ -825,7 +904,7 @@ export const DEFAULT_SCENARIOS_CONTENT: ScenariosContent = {
             squads: [
               { archetypeId: 'infantry', tier: 2, size: 26 },
               { archetypeId: 'spearmen', tier: 2, size: 24 },
-              { archetypeId: 'archers', tier: 1, size: 22 },
+              { archetypeId: 'slingers', tier: 1, size: 22 },
             ],
           },
           {
@@ -847,7 +926,7 @@ export const DEFAULT_SCENARIOS_CONTENT: ScenariosContent = {
             squads: [
               { archetypeId: 'infantry', tier: 2, size: 28 },
               { archetypeId: 'spearmen', tier: 3, size: 24 },
-              { archetypeId: 'archers', tier: 2, size: 24 },
+              { archetypeId: 'slingers', tier: 2, size: 24 },
             ],
           },
           {
@@ -855,7 +934,7 @@ export const DEFAULT_SCENARIOS_CONTENT: ScenariosContent = {
             squads: [
               { archetypeId: 'infantry', tier: 3, size: 26 },
               { archetypeId: 'cavalry', tier: 3, size: 20 },
-              { archetypeId: 'archers', tier: 2, size: 24 },
+              { archetypeId: 'slingers', tier: 2, size: 24 },
             ],
           },
         ],
@@ -893,7 +972,7 @@ export const DEFAULT_SCENARIOS_CONTENT: ScenariosContent = {
             squads: [
               { archetypeId: 'infantry', tier: 3, size: 30 },
               { archetypeId: 'cavalry', tier: 3, size: 24 },
-              { archetypeId: 'archers', tier: 2, size: 22 },
+              { archetypeId: 'slingers', tier: 2, size: 22 },
             ],
           },
           {

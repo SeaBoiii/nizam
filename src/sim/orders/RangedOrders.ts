@@ -9,6 +9,6 @@ export function isRangedOrder(order: OrderMode): boolean {
   return order === 'volley' || order === 'skirmish';
 }
 
-export function skirmishThreatRange(rangedRange: number): number {
-  return rangedRange * SKIRMISH_THREAT_FACTOR;
+export function skirmishThreatRange(rangedRange: number, threatFactor = SKIRMISH_THREAT_FACTOR): number {
+  return rangedRange * threatFactor;
 }

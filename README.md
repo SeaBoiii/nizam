@@ -264,6 +264,17 @@ After content reload, restart battle/run to apply changes to newly spawned units
 - Friendly fire is disabled by default.
 - Shielded units take reduced ranged damage from the front arc.
 
+## Slingers + Suppression (Sprint 13.1)
+
+- Added `Slingers` archetype (data-driven in `public/content/units.json`).
+- Slingers fire real `stone` projectiles with heavier arc than arrows.
+- Stone hits apply morale suppression on impact with a per-squad per-second cap to prevent instant rout chains.
+- Suppression tuning is in `public/content/objectives.json` under `suppression`:
+  - `stoneMoraleDamage`
+  - `stoneMoraleDamageOnShieldFrontMult`
+  - `maxSuppressionPerSecondPerSquad`
+- Mid/late enemy templates now include slingers via `public/content/scenarios.json`.
+
 ## Overworld node types
 
 - `BATTLE`: standard engagement with moderate enemies
@@ -280,7 +291,7 @@ After content reload, restart battle/run to apply changes to newly spawned units
 - Save/load + reset save via localStorage
 - Player army roster with squad tiers, upgrades, and recruiting
 - Node-driven scenario generation (battle/elite/boss scaling)
-- Squad archetypes: Infantry, Spearmen, Cavalry, Archers
+- Squad archetypes: Infantry, Spearmen, Cavalry, Archers, Slingers
 - Variable squad sizes driven by campaign roster
 - Formation slots with stable slot assignment
 - Steering with arrive + separation

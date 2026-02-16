@@ -204,7 +204,10 @@ export class BattleScene {
     this.squadIndicators = new SquadIndicators(this.overlayLayer);
     this.mapOverlay = new MapOverlay(this.terrainLayer);
     this.mapOverlay.draw(this.battleMap);
-    this.projectileSystem = new ProjectileSystem(this.projectileLayer);
+    this.projectileSystem = new ProjectileSystem(
+      this.projectileLayer,
+      contentManager.getObjectiveTuning().suppression,
+    );
     this.trailSystem = new TrailSystem(this.trailLayer);
     this.hitFlashSystem = new HitFlashSystem(this.overlayLayer);
     this.routBurstSystem = new RoutBurstSystem(this.overlayLayer);
@@ -441,7 +444,7 @@ export class BattleScene {
   }
 
   private teamColor(archetypeId: string, team: TeamId): number {
-    const isArcher = archetypeId.includes('archer');
+    const isArcher = archetypeId.includes('archer') || archetypeId.includes('slinger');
     const isCavalry = archetypeId.includes('cavalry');
 
     if (team === TeamId.Blue) {

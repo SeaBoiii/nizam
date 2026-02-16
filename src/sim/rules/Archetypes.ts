@@ -18,4 +18,5 @@ export const INFANTRY: UnitArchetype = createLiveArchetype('infantry');
 export const SPEARMEN: UnitArchetype = createLiveArchetype('spearmen');
 export const CAVALRY: UnitArchetype = createLiveArchetype('cavalry');
 export const ARCHERS: UnitArchetype = createLiveArchetype('archers');
-export const ALL_ARCHETYPES: readonly UnitArchetype[] = [INFANTRY, SPEARMEN, CAVALRY, ARCHERS];
+export const SLINGERS: UnitArchetype = createLiveArchetype('slingers');
+export const ALL_ARCHETYPES: readonly UnitArchetype[] = [INFANTRY, SPEARMEN, CAVALRY, ARCHERS, SLINGERS];

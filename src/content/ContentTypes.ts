@@ -63,6 +63,8 @@ export interface PerkModsContent {
   armorEffectivenessMult?: number;
   moveSpeedMult?: number;
   fieldMedicRecruitsPerCasualty?: number;
+  rangedAttackRateMult?: number;
+  suppressionMult?: number;
 }
 
 export interface PerkContent {
@@ -137,6 +139,13 @@ export interface SiegeObjectiveTuningContent {
   eliteChance: number;
 }
 
+export interface SuppressionTuningContent {
+  enabled: boolean;
+  stoneMoraleDamage: number;
+  stoneMoraleDamageOnShieldFrontMult: number;
+  maxSuppressionPerSecondPerSquad: number;
+}
+
 export interface ObjectivesTuningContent {
   contentVersion: string;
   selectionWeightsByNodeType: Record<'BATTLE' | 'ELITE' | 'BOSS', ObjectiveSelectionWeights>;
@@ -144,6 +153,7 @@ export interface ObjectivesTuningContent {
   holdout: HoldoutObjectiveTuningContent;
   escort: EscortObjectiveTuningContent;
   siege: SiegeObjectiveTuningContent;
+  suppression: SuppressionTuningContent;
 }
 
 export interface NodeTypeWeights {

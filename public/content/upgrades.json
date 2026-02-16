@@ -18,6 +18,10 @@
     "archers": {
       "nextTierByTier": { "1": 2, "2": 3 },
       "costByTier": { "2": 0, "3": 0 }
+    },
+    "slingers": {
+      "nextTierByTier": { "1": 2, "2": 3 },
+      "costByTier": { "2": 0, "3": 0 }
     }
   }
 }

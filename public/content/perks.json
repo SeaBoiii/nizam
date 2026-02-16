@@ -100,6 +100,16 @@
       "mods": {
         "fieldMedicRecruitsPerCasualty": 0.12
       }
+    },
+    {
+      "id": "stone_storm",
+      "name": "Stone Storm",
+      "desc": "Slingers fire faster and suppress harder.",
+      "rarity": "rare",
+      "mods": {
+        "rangedAttackRateMult": 1.08,
+        "suppressionMult": 1.2
+      }
     }
   ]
 }

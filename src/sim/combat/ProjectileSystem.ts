@@ -6,6 +6,7 @@ import { TeamId } from '../types';
 import type { SpatialHash } from '../SpatialHash';
 import { FRIENDLY_FIRE_ENABLED } from '../rules/Constants';
 import { computeRangedDamage } from '../rules/RangedDamage';
+import { applySuppressionOnHit, type SuppressionTuning } from '../rules/Suppression';
 import { Projectile, type ProjectileSpawnParams } from './Projectile';
 
 interface SpawnParams extends Omit<ProjectileSpawnParams, 'id'> {}
@@ -16,11 +17,18 @@ export class ProjectileSystem {
   private readonly projectiles: Projectile[] = [];
   private readonly pool: Projectile[] = [];
   private readonly nearbyUnits: Soldier[] = [];
+  private readonly suppressionTuning: SuppressionTuning;
   private nextId = 1;
 
-  constructor(layer: Container) {
+  constructor(layer: Container, suppressionTuning?: SuppressionTuning) {
     this.graphics = new Graphics();
     layer.addChild(this.graphics);
+    this.suppressionTuning = suppressionTuning ?? {
+      enabled: false,
+      stoneMoraleDamage: 0,
+      stoneMoraleDamageOnShieldFrontMult: 1,
+      maxSuppressionPerSecondPerSquad: 0,
+    };
   }
 
   clear(): void {
@@ -46,10 +54,12 @@ export class ProjectileSystem {
       damage: params.damage,
       shooterUnitId: params.shooterUnitId,
       shooterSquadId: params.shooterSquadId,
-      gravity: params.gravity,
-      radius: params.radius,
-      maxLife: params.maxLife,
-      drag: params.drag,
+          gravity: params.gravity,
+          kind: params.kind,
+          suppressionMult: params.suppressionMult,
+          radius: params.radius,
+          maxLife: params.maxLife,
+          drag: params.drag,
     });
 
     this.nextId += 1;
@@ -92,6 +102,11 @@ export class ProjectileSystem {
 
         const damage = computeRangedDamage(projectile, unit, projectile.damage);
         unit.applyDamage(damage);
+        applySuppressionOnHit({
+          projectile,
+          defender: unit,
+          tuning: this.suppressionTuning,
+        });
         events.emitDamage(projectile.teamId, unit.team, unit.position.x, unit.position.y, damage);
 
         projectile.alive = false;
@@ -110,10 +125,18 @@ export class ProjectileSystem {
     for (let i = 0; i < this.projectiles.length; i += 1) {
       const projectile = this.projectiles[i];
       const color = projectile.teamId === TeamId.Blue ? 0xbfdfff : 0xffc9b0;
+      const trailStartX = projectile.kind === 'stone'
+        ? projectile.pos.x - (projectile.pos.x - projectile.prevPos.x) * 0.55
+        : projectile.prevPos.x;
+      const trailStartY = projectile.kind === 'stone'
+        ? projectile.pos.y - (projectile.pos.y - projectile.prevPos.y) * 0.55
+        : projectile.prevPos.y;
+      const trailAlpha = projectile.kind === 'stone' ? 0.22 : 0.35;
+      const trailWidth = projectile.kind === 'stone' ? 1.2 : 1;
 
-      this.graphics.moveTo(projectile.prevPos.x, projectile.prevPos.y);
+      this.graphics.moveTo(trailStartX, trailStartY);
       this.graphics.lineTo(projectile.pos.x, projectile.pos.y);
-      this.graphics.stroke({ color, alpha: 0.35, width: 1 });
+      this.graphics.stroke({ color, alpha: trailAlpha, width: trailWidth });
 
       this.graphics.circle(projectile.pos.x, projectile.pos.y, projectile.radius);
       this.graphics.fill({ color, alpha: 0.95 });

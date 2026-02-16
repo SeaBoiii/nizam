@@ -1,4 +1,13 @@
-export type UnitTag = 'infantry' | 'spear' | 'cavalry' | 'archer' | 'shield' | 'light' | 'heavy' | 'caravan';
+export type UnitTag =
+  | 'infantry'
+  | 'spear'
+  | 'cavalry'
+  | 'archer'
+  | 'slinger'
+  | 'shield'
+  | 'light'
+  | 'heavy'
+  | 'caravan';
 
 export interface UnitStats {
   hp: number;

@@ -85,6 +85,9 @@ export class Squad {
   private desiredFacing: number | null = null;
   private reachedMapEdge = false;
   private chargeTarget: Squad | null = null;
+  private suppressionWindowTimer = 0;
+  private suppressionAppliedThisWindow = 0;
+  private suppressedTimer = 0;
 
   private readonly slotTemp = new Vec2();
   private readonly worldSlotTemp = new Vec2();
@@ -256,6 +259,7 @@ export class Squad {
       this.label.visible = false;
       return;
     }
+    this.tickSuppression(context.dt);
 
     const usesMorale = !this.archetype.tags.includes('caravan');
     if (usesMorale) {
@@ -465,7 +469,7 @@ export class Squad {
     this.desiredFacing = Math.atan2(toTargetY, toTargetX);
 
     const rangedRange = Math.max(130, this.archetype.stats.rangedRange);
-    const threatRange = skirmishThreatRange(rangedRange);
+    const threatRange = skirmishThreatRange(rangedRange, this.archetype.tags.includes('slinger') ? 0.55 : undefined);
     if (targetDist < threatRange) {
       const invDist = 1 / targetDist;
       this.steerTargetTemp.set(
@@ -787,8 +791,41 @@ export class Squad {
   private updateLabel(radius: number): void {
     this.label.visible = true;
     this.label.alpha = this.isSelected ? 1 : 0.76;
-    this.label.text = `S${this.id} ${this.archetype.name} ${Math.round(this.morale)}%`;
+    this.label.text = `S${this.id} ${this.archetype.name} ${Math.round(this.morale)}%${
+      this.isSuppressed() ? ' SUPPRESSED' : ''
+    }`;
     this.label.position.set(this.anchor.x, this.anchor.y - radius - 8);
+  }
+
+  applySuppression(amount: number, maxPerSecond: number): number {
+    if (this.archetype.tags.includes('caravan')) {
+      return 0;
+    }
+
+    const clampedAmount = Math.max(0, amount);
+    const allowed = Math.max(0, maxPerSecond - this.suppressionAppliedThisWindow);
+    const applied = Math.min(clampedAmount, allowed);
+    if (applied <= 0) {
+      return 0;
+    }
+
+    this.suppressionAppliedThisWindow += applied;
+    this.morale = clamp(this.morale - applied, 0, 100);
+    this.suppressedTimer = Math.max(this.suppressedTimer, 1.5);
+    return applied;
+  }
+
+  isSuppressed(): boolean {
+    return this.suppressedTimer > 0;
+  }
+
+  private tickSuppression(dt: number): void {
+    this.suppressionWindowTimer += dt;
+    if (this.suppressionWindowTimer >= 1) {
+      this.suppressionWindowTimer -= Math.floor(this.suppressionWindowTimer);
+      this.suppressionAppliedThisWindow = 0;
+    }
+    this.suppressedTimer = Math.max(0, this.suppressedTimer - dt);
   }
 
   private perkedMoveSpeed(baseSpeed: number): number {

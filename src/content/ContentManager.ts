@@ -179,6 +179,12 @@ function cloneObjectivesContent(content: ObjectivesTuningContent): ObjectivesTun
       eliteDepthMin: content.siege.eliteDepthMin,
       eliteChance: content.siege.eliteChance,
     },
+    suppression: {
+      enabled: content.suppression.enabled,
+      stoneMoraleDamage: content.suppression.stoneMoraleDamage,
+      stoneMoraleDamageOnShieldFrontMult: content.suppression.stoneMoraleDamageOnShieldFrontMult,
+      maxSuppressionPerSecondPerSquad: content.suppression.maxSuppressionPerSecondPerSquad,
+    },
   };
 }
 
@@ -542,8 +548,9 @@ function isValidObjectivesContent(value: unknown): value is ObjectivesTuningCont
   const holdout = asObject(candidate.holdout);
   const escort = asObject(candidate.escort);
   const siege = asObject(candidate.siege);
+  const suppression = asObject(candidate.suppression);
 
-  if (!selection || !capture || !holdout || !escort || !siege) {
+  if (!selection || !capture || !holdout || !escort || !siege || !suppression) {
     return false;
   }
 
@@ -609,6 +616,15 @@ function isValidObjectivesContent(value: unknown): value is ObjectivesTuningCont
     !isFiniteNumber(siege.opposingProgressDrainFactor) ||
     !isFiniteNumber(siege.eliteDepthMin) ||
     !isFiniteNumber(siege.eliteChance)
+  ) {
+    return false;
+  }
+
+  if (
+    typeof suppression.enabled !== 'boolean' ||
+    !isFiniteNumber(suppression.stoneMoraleDamage) ||
+    !isFiniteNumber(suppression.stoneMoraleDamageOnShieldFrontMult) ||
+    !isFiniteNumber(suppression.maxSuppressionPerSecondPerSquad)
   ) {
     return false;
   }

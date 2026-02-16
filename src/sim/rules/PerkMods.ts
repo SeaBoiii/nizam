@@ -14,6 +14,8 @@ export interface CombinedPerkMods {
   armorEffectivenessMult: number;
   moveSpeedMult: number;
   fieldMedicRecruitsPerCasualty: number;
+  rangedAttackRateMult: number;
+  suppressionMult: number;
 }
 
 export const DEFAULT_PERK_MODS: Readonly<CombinedPerkMods> = Object.freeze({
@@ -32,6 +34,8 @@ export const DEFAULT_PERK_MODS: Readonly<CombinedPerkMods> = Object.freeze({
   armorEffectivenessMult: 1,
   moveSpeedMult: 1,
   fieldMedicRecruitsPerCasualty: 0,
+  rangedAttackRateMult: 1,
+  suppressionMult: 1,
 });
 
 export function createPerkMods(): CombinedPerkMods {
@@ -51,6 +55,8 @@ export function createPerkMods(): CombinedPerkMods {
     armorEffectivenessMult: 1,
     moveSpeedMult: 1,
     fieldMedicRecruitsPerCasualty: 0,
+    rangedAttackRateMult: 1,
+    suppressionMult: 1,
   };
 }
 
@@ -87,5 +93,6 @@ export function mergePerkMods(target: CombinedPerkMods, source: Record<string, u
     target.fieldMedicRecruitsPerCasualty,
     source.fieldMedicRecruitsPerCasualty,
   );
+  target.rangedAttackRateMult = applyMul(target.rangedAttackRateMult, source.rangedAttackRateMult);
+  target.suppressionMult = applyMul(target.suppressionMult, source.suppressionMult);
 }
-

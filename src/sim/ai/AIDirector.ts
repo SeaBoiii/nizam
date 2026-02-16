@@ -161,7 +161,7 @@ export class AIDirector {
 
       const maxRange = Math.max(120, squad.archetype.stats.rangedRange);
       if (
-        this.isThreatened(squad, this.playerSquads, maxRange * 0.6) ||
+        this.isThreatened(squad, this.playerSquads, maxRange * this.rangedThreatFactor(squad, 0.6)) ||
         distanceSq(squad.anchor, objectivePoint) > (maxRange * 0.9) * (maxRange * 0.9)
       ) {
         this.commandSkirmish(squad);
@@ -215,7 +215,7 @@ export class AIDirector {
       }
       const maxRange = Math.max(120, squad.archetype.stats.rangedRange);
       if (
-        this.isThreatened(squad, this.playerSquads, maxRange * 0.55) ||
+        this.isThreatened(squad, this.playerSquads, maxRange * this.rangedThreatFactor(squad, 0.55)) ||
         distanceSq(squad.anchor, commanderTarget) > (maxRange * 0.92) * (maxRange * 0.92)
       ) {
         this.commandSkirmish(squad);
@@ -281,7 +281,7 @@ export class AIDirector {
       }
       const maxRange = Math.max(120, squad.archetype.stats.rangedRange);
       if (
-        this.isThreatened(squad, this.playerSquads, maxRange * 0.55) ||
+        this.isThreatened(squad, this.playerSquads, maxRange * this.rangedThreatFactor(squad, 0.55)) ||
         distanceSq(squad.anchor, nearestEnemy.anchor) > maxRange * maxRange
       ) {
         this.commandSkirmish(squad);
@@ -334,7 +334,7 @@ export class AIDirector {
       }
       const maxRange = Math.max(120, squad.archetype.stats.rangedRange);
       if (
-        this.isThreatened(squad, this.playerSquads, maxRange * 0.55) ||
+        this.isThreatened(squad, this.playerSquads, maxRange * this.rangedThreatFactor(squad, 0.55)) ||
         distanceSq(squad.anchor, targetPoint) > maxRange * maxRange
       ) {
         this.commandSkirmish(squad);
@@ -443,7 +443,7 @@ export class AIDirector {
       }
       const maxRange = Math.max(120, squad.archetype.stats.rangedRange);
       if (
-        this.isThreatened(squad, this.playerSquads, maxRange * 0.56) ||
+        this.isThreatened(squad, this.playerSquads, maxRange * this.rangedThreatFactor(squad, 0.56)) ||
         distanceSq(squad.anchor, nearestEnemy.anchor) > (maxRange * 0.92) * (maxRange * 0.92)
       ) {
         this.commandSkirmish(squad);
@@ -560,6 +560,13 @@ export class AIDirector {
       }
     }
     return false;
+  }
+
+  private rangedThreatFactor(squad: Squad, defaultFactor: number): number {
+    if (squad.archetype.tags.includes('slinger')) {
+      return 0.55;
+    }
+    return defaultFactor;
   }
 
   private commandMove(squad: Squad, target: Vec2, facing: number | null): void {

@@ -1,4 +1,5 @@
 import { ARCHER_BASE_SPREAD_RADIANS, ARCHER_MAX_LEAD_TIME, ARCHER_MOVING_SPREAD_MULTIPLIER, ARCHER_MOVING_SPEED_THRESHOLD } from '../rules/Constants';
+import { ARROW_PROJECTILE_RADIUS, STONE_PROJECTILE_RADIUS } from '../rules/Constants';
 import { clamp } from '../../utils/math';
 import type { GameEvents } from '../events/GameEvents';
 import type { Soldier } from '../Soldier';
@@ -30,7 +31,9 @@ export class RangedSystem {
       const soldiers = squad.soldiers;
       for (let i = 0; i < soldiers.length; i += 1) {
         const unit = soldiers[i];
-        if (!unit.alive || !unit.tags.has('archer')) {
+        const isArcher = unit.tags.has('archer');
+        const isSlinger = unit.tags.has('slinger');
+        if (!unit.alive || (!isArcher && !isSlinger)) {
           continue;
         }
 
@@ -109,6 +112,7 @@ export class RangedSystem {
         aimY = unit.position.y + dirY * projectileSpeed;
 
         projectileSystem.spawnProjectile({
+          kind: isSlinger ? 'stone' : 'arrow',
           teamId: unit.team,
           x: unit.position.x + dirX * 6,
           y: unit.position.y + dirY * 6,
@@ -118,11 +122,17 @@ export class RangedSystem {
           shooterUnitId: unit.id,
           shooterSquadId: unit.squad.id,
           gravity: unit.baseStats.projectileGravity,
+          suppressionMult: unit.squad.perkMods.suppressionMult,
+          radius: isSlinger ? STONE_PROJECTILE_RADIUS : ARROW_PROJECTILE_RADIUS,
         });
         events.emitProjectileFired(unit.team, unit.position.x, unit.position.y);
 
-        const cooldownFromRate = 1 / Math.max(0.2, unit.baseStats.attackRate);
-        unit.rangedCooldown = unit.baseStats.rangedCooldown > 0 ? unit.baseStats.rangedCooldown : cooldownFromRate;
+        const effectiveAttackRate = Math.max(0.2, unit.baseStats.attackRate * Math.max(0.2, perkMods.rangedAttackRateMult));
+        const cooldownFromRate = 1 / effectiveAttackRate;
+        unit.rangedCooldown =
+          unit.baseStats.rangedCooldown > 0
+            ? unit.baseStats.rangedCooldown / Math.max(0.2, perkMods.rangedAttackRateMult)
+            : cooldownFromRate;
       }
     }
 

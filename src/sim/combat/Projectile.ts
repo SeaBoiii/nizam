@@ -2,6 +2,8 @@ import type { TeamId } from '../types';
 import { Vec2 } from '../../utils/vec2';
 import { PROJECTILE_DEFAULT_DRAG, PROJECTILE_DEFAULT_MAX_LIFE, PROJECTILE_DEFAULT_RADIUS } from '../rules/Constants';
 
+export type ProjectileKind = 'arrow' | 'stone';
+
 export interface ProjectileSpawnParams {
   id: number;
   teamId: TeamId;
@@ -13,6 +15,8 @@ export interface ProjectileSpawnParams {
   shooterUnitId: number;
   shooterSquadId: number;
   gravity: number;
+  kind?: ProjectileKind;
+  suppressionMult?: number;
   radius?: number;
   maxLife?: number;
   drag?: number;
@@ -33,6 +37,8 @@ export class Projectile {
   shooterSquadId = -1;
   gravity = 0;
   drag = PROJECTILE_DEFAULT_DRAG;
+  kind: ProjectileKind = 'arrow';
+  suppressionMult = 1;
 
   reset(params: ProjectileSpawnParams): void {
     this.id = params.id;
@@ -49,6 +55,8 @@ export class Projectile {
     this.shooterSquadId = params.shooterSquadId;
     this.gravity = params.gravity;
     this.drag = params.drag ?? PROJECTILE_DEFAULT_DRAG;
+    this.kind = params.kind ?? 'arrow';
+    this.suppressionMult = params.suppressionMult ?? 1;
   }
 
   update(dt: number): void {

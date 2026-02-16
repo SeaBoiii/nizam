@@ -7,7 +7,7 @@ import { Vec2 } from '../../utils/vec2';
 export type SquadRole = 'INFANTRY' | 'SPEAR' | 'CAVALRY' | 'ARCHER';
 
 export function squadRole(squad: Squad): SquadRole {
-  if (squad.archetype.tags.includes('archer')) {
+  if (squad.archetype.tags.includes('archer') || squad.archetype.tags.includes('slinger')) {
     return 'ARCHER';
   }
   if (squad.archetype.tags.includes('cavalry')) {

@@ -27,7 +27,7 @@
     "waveRandomSizeMaxAdd": 4,
     "waveSizePerDifficulty": 2,
     "waveSizePerWave": 1,
-    "waveArchetypes": ["infantry", "spearmen", "cavalry", "archers"]
+    "waveArchetypes": ["infantry", "spearmen", "cavalry", "archers", "slingers"]
   },
   "escort": {
     "timeLimitSeconds": 180,
@@ -49,5 +49,11 @@
     "opposingProgressDrainFactor": 0.42,
     "eliteDepthMin": 7,
     "eliteChance": 0.38
+  },
+  "suppression": {
+    "enabled": true,
+    "stoneMoraleDamage": 2.5,
+    "stoneMoraleDamageOnShieldFrontMult": 0.6,
+    "maxSuppressionPerSecondPerSquad": 12
   }
 }

@@ -237,6 +237,65 @@
           "chargeMinSpeed": 999
         }
       }
+    },
+    {
+      "id": "slingers",
+      "name": "Slingers",
+      "recruitable": true,
+      "tags": ["slinger", "light"],
+      "tiers": {
+        "1": {
+          "hp": 70,
+          "moveSpeed": 105,
+          "attackDamage": 5,
+          "attackRate": 1.6,
+          "meleeRange": 12,
+          "rangedDamage": 5,
+          "rangedRange": 360,
+          "projectileSpeed": 420,
+          "projectileGravity": 520,
+          "rangedCooldown": 0,
+          "accuracy": 0.78,
+          "armor": 1,
+          "mass": 0.85,
+          "chargePower": 1,
+          "chargeMinSpeed": 999
+        },
+        "2": {
+          "hp": 79,
+          "moveSpeed": 108,
+          "attackDamage": 5.5,
+          "attackRate": 1.62,
+          "meleeRange": 12,
+          "rangedDamage": 5.5,
+          "rangedRange": 378,
+          "projectileSpeed": 420,
+          "projectileGravity": 520,
+          "rangedCooldown": 0,
+          "accuracy": 0.83,
+          "armor": 1.1,
+          "mass": 0.85,
+          "chargePower": 1,
+          "chargeMinSpeed": 999
+        },
+        "3": {
+          "hp": 88,
+          "moveSpeed": 110,
+          "attackDamage": 6,
+          "attackRate": 1.64,
+          "meleeRange": 12,
+          "rangedDamage": 6,
+          "rangedRange": 396,
+          "projectileSpeed": 420,
+          "projectileGravity": 520,
+          "rangedCooldown": 0,
+          "accuracy": 0.86,
+          "armor": 1.2,
+          "mass": 0.85,
+          "chargePower": 1,
+          "chargeMinSpeed": 999
+        }
+      }
     }
   ],
   "startingArmy": {
