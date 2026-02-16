@@ -89,6 +89,14 @@ export class HoldoutObjective implements IObjective {
       caravan: null,
       exitPosition: null,
       exitRadius: 0,
+      siegeStage: null,
+      gateZonePosition: null,
+      gateZoneRadius: 0,
+      courtyardZonePosition: null,
+      courtyardZoneRadius: 0,
+      gateOpen: false,
+      attackerTeam: null,
+      defenderTeam: null,
     };
   }
 

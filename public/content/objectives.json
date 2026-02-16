@@ -1,9 +1,9 @@
 {
   "contentVersion": "1.0.0",
   "selectionWeightsByNodeType": {
-    "BATTLE": { "CAPTURE": 0.55, "ASSASSINATE": 0.15, "HOLDOUT": 0.15, "ESCORT": 0.15 },
-    "ELITE": { "CAPTURE": 0.5, "ASSASSINATE": 0.5, "HOLDOUT": 0.0, "ESCORT": 0.0 },
-    "BOSS": { "CAPTURE": 0.4, "ASSASSINATE": 0.6, "HOLDOUT": 0.0, "ESCORT": 0.0 }
+    "BATTLE": { "CAPTURE": 0.55, "ASSASSINATE": 0.15, "HOLDOUT": 0.15, "ESCORT": 0.15, "SIEGE": 0.0 },
+    "ELITE": { "CAPTURE": 0.42, "ASSASSINATE": 0.42, "HOLDOUT": 0.0, "ESCORT": 0.0, "SIEGE": 0.16 },
+    "BOSS": { "CAPTURE": 0.4, "ASSASSINATE": 0.6, "HOLDOUT": 0.0, "ESCORT": 0.0, "SIEGE": 0.0 }
   },
   "capture": {
     "radius": 240,
@@ -40,5 +40,14 @@
     "exitXPadding": 220,
     "startJitterY": 180,
     "exitJitterY": 220
+  },
+  "siege": {
+    "timeLimitSeconds": 240,
+    "gateCaptureRate": 0.95,
+    "courtyardCaptureRate": 0.82,
+    "contestedDecayRate": 0.3,
+    "opposingProgressDrainFactor": 0.42,
+    "eliteDepthMin": 7,
+    "eliteChance": 0.38
   }
 }

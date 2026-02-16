@@ -82,6 +82,7 @@ export class BattleScene {
   private readonly battleMap: BattleMapState;
   private readonly navGrid: NavGrid;
   private readonly terrainMods: TerrainMods;
+  private mapNavRevision = 0;
 
   private readonly root = new Container();
   private readonly worldLayer = new Container();
@@ -172,8 +173,9 @@ export class BattleScene {
       this.worldBounds.width,
       this.worldBounds.height,
       this.battleMap.cellSize,
-      this.battleMap.getObstacleRects(),
+      this.battleMap.getBlockedObstacleRects(),
     );
+    this.mapNavRevision = this.battleMap.getNavRevision();
     this.terrainMods = new TerrainMods(this.battleMap);
 
     this.objectiveManager = new ObjectiveManager(
@@ -228,6 +230,7 @@ export class BattleScene {
       scenario: this.scenario,
       bounds: this.worldBounds,
       mapState: this.battleMap,
+      events: this.gameEvents,
       objectiveCenter: new Vec2(this.battleMap.getCapturePoint().x, this.battleMap.getCapturePoint().y),
       simTime: 0,
       squads: this.squads,
@@ -840,6 +843,7 @@ export class BattleScene {
 
   private fixedUpdate(dt: number): void {
     this.gameEvents.beginTick();
+    this.syncNavToMapState();
     this.simTime += dt;
     this.updateCameraPan(dt);
     this.objectiveWorld.simTime = this.simTime;
@@ -871,6 +875,7 @@ export class BattleScene {
 
     this.collectAliveSoldiers();
     this.objectiveManager.update(dt, this.objectiveWorld);
+    this.syncNavToMapState();
 
     const winnerByObjective = this.objectiveManager.getWinner();
     if (winnerByObjective !== null) {
@@ -893,6 +898,15 @@ export class BattleScene {
     if (objectiveType === 'HOLDOUT' || objectiveType === 'ESCORT') {
       if (playerRemaining <= 0) {
         this.finishBattle(false);
+        return;
+      }
+    } else if (objectiveType === 'SIEGE') {
+      if (playerRemaining <= 0) {
+        this.finishBattle(false);
+        return;
+      }
+      if (enemyRemaining <= 0) {
+        this.finishBattle(true);
         return;
       }
     } else {
@@ -1021,6 +1035,7 @@ export class BattleScene {
   }
 
   private renderFrame(): void {
+    this.mapOverlay.draw(this.battleMap);
     this.camera.applyTo(this.worldLayer);
     this.objectiveManager.renderOverlay(this.objectiveGraphics, this.camera);
     this.drawWaypointPaths();
@@ -1174,6 +1189,9 @@ export class BattleScene {
     this.gameEvents.onBattleEnd((event) => {
       audioManager.play(event.winnerTeamId === TeamId.Blue ? 'victory' : 'defeat', 1, 0);
     });
+    this.gameEvents.onGateOpened(() => {
+      audioManager.play('horn_charge', 0.85, 300);
+    });
   }
 
   private toCanvasPoint(clientX: number, clientY: number, out: Vec2): Vec2 {
@@ -1192,5 +1210,20 @@ export class BattleScene {
       return;
     }
     this.gameEvents.emitOrderIssued(TeamId.Blue, orderType, this.orderEmitIds);
+  }
+
+  private syncNavToMapState(): void {
+    const revision = this.battleMap.getNavRevision();
+    if (revision === this.mapNavRevision) {
+      return;
+    }
+    this.mapNavRevision = revision;
+    this.navGrid.rebuild(this.battleMap.getBlockedObstacleRects());
+    for (let i = 0; i < this.squads.length; i += 1) {
+      const flowField = this.squads[i].flowField;
+      if (flowField !== null) {
+        flowField.clear();
+      }
+    }
   }
 }

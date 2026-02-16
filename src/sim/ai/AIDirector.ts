@@ -36,6 +36,7 @@ export class AIDirector {
   private readonly flankPoint = new Vec2();
   private readonly protectPoint = new Vec2();
   private readonly hillPoint = new Vec2();
+  private readonly siegeTargetPoint = new Vec2();
   private readonly commandMemory = new Map<number, string>();
 
   update(dt: number, context: AIDirectorContext): void {
@@ -83,6 +84,8 @@ export class AIDirector {
         this.runAssassinateTactic(squad, role, nearestEnemy, assassinSquad, context.objective, context);
       } else if (objectiveType === 'HOLDOUT') {
         this.runHoldoutTactic(squad, role, nearestEnemy, context);
+      } else if (objectiveType === 'SIEGE') {
+        this.runSiegeTactic(squad, role, nearestEnemy, context.objective, context);
       } else {
         this.runEscortTactic(squad, role, nearestEnemy, context.objective, context);
       }
@@ -376,6 +379,164 @@ export class AIDirector {
 
     this.commandMove(squad, targetPoint, this.angleTo(targetPoint, squad.anchor));
     if (role !== 'SPEAR') {
+      this.commandCharge(squad);
+    } else {
+      this.commandHold(squad);
+    }
+  }
+
+  private runSiegeTactic(
+    squad: Squad,
+    role: ReturnType<typeof squadRole>,
+    nearestEnemy: Squad,
+    objective: ObjectiveTacticalState,
+    context: AIDirectorContext,
+  ): void {
+    const attackerTeam = objective.attackerTeam ?? TeamId.Red;
+    if (attackerTeam === TeamId.Red) {
+      this.runSiegeAttackerTactic(squad, role, nearestEnemy, objective, context);
+      return;
+    }
+    this.runSiegeDefenderTactic(squad, role, nearestEnemy, objective, context);
+  }
+
+  private runSiegeAttackerTactic(
+    squad: Squad,
+    role: ReturnType<typeof squadRole>,
+    nearestEnemy: Squad,
+    objective: ObjectiveTacticalState,
+    context: AIDirectorContext,
+  ): void {
+    const stageGate = objective.siegeStage !== 'COURTYARD';
+    const gatePos = objective.gateZonePosition ?? objective.focusPosition;
+    const courtyardPos = objective.courtyardZonePosition ?? objective.focusPosition;
+    const targetZone = stageGate ? gatePos : courtyardPos;
+    this.siegeTargetPoint.copy(targetZone);
+
+    if (role === 'INFANTRY') {
+      this.commandMove(squad, this.siegeTargetPoint, this.angleTo(nearestEnemy.anchor, this.siegeTargetPoint));
+      if (distanceSq(squad.anchor, nearestEnemy.anchor) < 180 * 180) {
+        this.commandCharge(squad);
+      } else if (distanceSq(squad.anchor, this.siegeTargetPoint) < CLOSE_TO_POINT_SQ) {
+        this.commandHold(squad);
+      }
+      return;
+    }
+
+    if (role === 'SPEAR') {
+      const anchorOffset = stageGate ? 80 : 60;
+      this.protectPoint.x = this.siegeTargetPoint.x - anchorOffset;
+      this.protectPoint.y = this.siegeTargetPoint.y + ((squad.id & 1) === 0 ? -46 : 46);
+      if (distanceSq(squad.anchor, this.protectPoint) < 86 * 86) {
+        this.commandHold(squad);
+      } else {
+        this.commandMove(squad, this.protectPoint, this.angleTo(nearestEnemy.anchor, this.protectPoint));
+      }
+      return;
+    }
+
+    if (role === 'ARCHER') {
+      const foundHill = context.mapState.getNearestHillCenter(squad.anchor, this.hillPoint);
+      if (foundHill && distanceSq(squad.anchor, this.hillPoint) > 110 * 110) {
+        this.commandMove(squad, this.hillPoint, this.angleTo(nearestEnemy.anchor, this.hillPoint));
+        return;
+      }
+      const maxRange = Math.max(120, squad.archetype.stats.rangedRange);
+      if (
+        this.isThreatened(squad, this.playerSquads, maxRange * 0.56) ||
+        distanceSq(squad.anchor, nearestEnemy.anchor) > (maxRange * 0.92) * (maxRange * 0.92)
+      ) {
+        this.commandSkirmish(squad);
+      } else {
+        this.commandVolley(squad);
+      }
+      return;
+    }
+
+    if (stageGate && !objective.gateOpen) {
+      computeFlankPoint(nearestEnemy, context.world, this.flankPoint, 210);
+      const flankPath = context.navGrid.estimatePathDistance(
+        squad.anchor.x,
+        squad.anchor.y,
+        this.flankPoint.x,
+        this.flankPoint.y,
+        130,
+      );
+      const direct = Math.hypot(this.flankPoint.x - squad.anchor.x, this.flankPoint.y - squad.anchor.y);
+      if (flankPath > direct * 1.8) {
+        this.protectPoint.x = gatePos.x - 92;
+        this.protectPoint.y = gatePos.y + ((squad.id & 1) === 0 ? -90 : 90);
+        this.commandMove(squad, this.protectPoint, this.angleTo(nearestEnemy.anchor, this.protectPoint));
+        this.commandHold(squad);
+        return;
+      }
+
+      this.commandMove(squad, this.flankPoint, this.angleTo(nearestEnemy.anchor, this.flankPoint));
+      if (distanceSq(squad.anchor, nearestEnemy.anchor) < 235 * 235 && !context.mapState.isInForest(squad.anchor.x, squad.anchor.y)) {
+        this.commandCharge(squad);
+      }
+      return;
+    }
+
+    computeFlankPoint(nearestEnemy, context.world, this.flankPoint, 190);
+    this.commandMove(squad, this.flankPoint, this.angleTo(nearestEnemy.anchor, this.flankPoint));
+    if (distanceSq(squad.anchor, nearestEnemy.anchor) < 250 * 250) {
+      this.commandCharge(squad);
+    }
+  }
+
+  private runSiegeDefenderTactic(
+    squad: Squad,
+    role: ReturnType<typeof squadRole>,
+    nearestEnemy: Squad,
+    objective: ObjectiveTacticalState,
+    context: AIDirectorContext,
+  ): void {
+    const stageGate = objective.siegeStage !== 'COURTYARD';
+    const gatePos = objective.gateZonePosition ?? objective.focusPosition;
+    const courtyardPos = objective.courtyardZonePosition ?? objective.focusPosition;
+    const defendZone = stageGate ? gatePos : courtyardPos;
+    const holdOffset = stageGate ? 100 : 45;
+    this.siegeTargetPoint.x = defendZone.x + holdOffset;
+    this.siegeTargetPoint.y = defendZone.y;
+
+    if (role === 'ARCHER') {
+      const foundHill = context.mapState.getNearestHillCenter(squad.anchor, this.hillPoint);
+      if (foundHill && distanceSq(squad.anchor, this.hillPoint) > 90 * 90) {
+        this.commandMove(squad, this.hillPoint, this.angleTo(nearestEnemy.anchor, this.hillPoint));
+        return;
+      }
+      if (this.isThreatened(squad, this.playerSquads, 180)) {
+        this.commandSkirmish(squad);
+      } else {
+        this.commandVolley(squad);
+      }
+      return;
+    }
+
+    if (role === 'CAVALRY') {
+      if (distanceSq(squad.anchor, nearestEnemy.anchor) < 210 * 210) {
+        this.commandCharge(squad);
+      } else {
+        computeFlankPoint(nearestEnemy, context.world, this.flankPoint, 160);
+        this.commandMove(squad, this.flankPoint, this.angleTo(nearestEnemy.anchor, this.flankPoint));
+      }
+      return;
+    }
+
+    if (role === 'SPEAR') {
+      this.protectPoint.x = this.siegeTargetPoint.x + 35;
+      this.protectPoint.y = this.siegeTargetPoint.y + ((squad.id & 1) === 0 ? -52 : 52);
+      if (distanceSq(squad.anchor, this.protectPoint) < 90 * 90) {
+        this.commandHold(squad);
+      } else {
+        this.commandMove(squad, this.protectPoint, this.angleTo(nearestEnemy.anchor, this.protectPoint));
+      }
+      return;
+    }
+
+    this.commandMove(squad, this.siegeTargetPoint, this.angleTo(nearestEnemy.anchor, this.siegeTargetPoint));
+    if (distanceSq(squad.anchor, nearestEnemy.anchor) < 190 * 190) {
       this.commandCharge(squad);
     } else {
       this.commandHold(squad);

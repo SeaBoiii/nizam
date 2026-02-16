@@ -1,7 +1,7 @@
 import type { MapTerrainEntryContent } from '../../content/ContentTypes';
 import type { Vec2 } from '../../utils/vec2';
 
-export type TerrainType = 'OBSTACLE' | 'FOREST' | 'HILL';
+export type TerrainType = 'OBSTACLE' | 'FOREST' | 'HILL' | 'GATE';
 
 export interface TerrainRect {
   x: number;
@@ -26,6 +26,9 @@ export function mapEntryToTerrainType(type: MapTerrainEntryContent['type']): Ter
   }
   if (type === 'FOREST_RECT') {
     return 'FOREST';
+  }
+  if (type === 'GATE_RECT') {
+    return 'GATE';
   }
   return 'HILL';
 }
@@ -73,4 +76,3 @@ export function segmentIntersectsRect(
   }
   return false;
 }
-

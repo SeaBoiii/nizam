@@ -33,7 +33,7 @@ function scenarioSeed(nodeId: string, nodeType: NodeType, runState: RunState): n
 }
 
 function weightedObjective(rng: SeededRng, weights: Record<BattleObjectiveType, number>): BattleObjectiveType {
-  const total = Math.max(0.0001, weights.CAPTURE + weights.ASSASSINATE + weights.HOLDOUT + weights.ESCORT);
+  const total = Math.max(0.0001, weights.CAPTURE + weights.ASSASSINATE + weights.HOLDOUT + weights.ESCORT + weights.SIEGE);
   const roll = rng.range(0, total);
 
   let acc = weights.CAPTURE;
@@ -48,7 +48,11 @@ function weightedObjective(rng: SeededRng, weights: Record<BattleObjectiveType, 
   if (roll <= acc) {
     return 'HOLDOUT';
   }
-  return 'ESCORT';
+  acc += weights.ESCORT;
+  if (roll <= acc) {
+    return 'ESCORT';
+  }
+  return 'SIEGE';
 }
 
 function nodeWeightsForObjective(nodeType: NodeType): 'BATTLE' | 'ELITE' | 'BOSS' | null {
@@ -122,11 +126,19 @@ export function selectObjectiveType(nodeId: string, nodeType: NodeType, runState
 
   const weights = objectives.selectionWeightsByNodeType[selectionKey];
   const rng = new SeededRng(objectiveSeed(nodeId, nodeType, runState));
+  if (
+    nodeType === 'ELITE' &&
+    runState.step >= objectives.siege.eliteDepthMin &&
+    rng.range(0, 1) <= objectives.siege.eliteChance
+  ) {
+    return 'SIEGE';
+  }
   return weightedObjective(rng, {
     CAPTURE: weights.CAPTURE,
     ASSASSINATE: weights.ASSASSINATE,
     HOLDOUT: weights.HOLDOUT,
     ESCORT: weights.ESCORT,
+    SIEGE: weights.SIEGE,
   });
 }
 
@@ -143,7 +155,10 @@ function resolveEnemySquads(
   rng: SeededRng,
 ): SquadMeta[] {
   const scenarios = contentManager.getScenarioTuning();
-  const templateBuckets = scenarios.templatesByNodeType[nodeType === 'BOSS' ? 'BOSS' : nodeType === 'ELITE' ? 'ELITE' : 'BATTLE'];
+  const templateBuckets =
+    objectiveType === 'SIEGE'
+      ? scenarios.siegeTemplates
+      : scenarios.templatesByNodeType[nodeType === 'BOSS' ? 'BOSS' : nodeType === 'ELITE' ? 'ELITE' : 'BATTLE'];
   const bucket = pickTemplateBucket(runState.step, templateBuckets);
   if (!bucket || bucket.templates.length === 0) {
     return [
@@ -177,9 +192,20 @@ function resolveEnemySquads(
   return squads;
 }
 
-function resolveMapId(nodeType: NodeType, runState: RunState, rng: SeededRng): string {
+function resolveMapId(
+  nodeType: NodeType,
+  objectiveType: BattleObjectiveType,
+  runState: RunState,
+  rng: SeededRng,
+): string {
   const allMaps = contentManager.getAllMaps();
   const fallbackMapId = allMaps.length > 0 ? allMaps[0].id : 'open_field';
+  if (objectiveType === 'SIEGE') {
+    const siegeMap = contentManager.getMap('siege_gatehouse');
+    if (siegeMap !== null) {
+      return siegeMap.id;
+    }
+  }
   const scenarios = contentManager.getScenarioTuning();
   const poolBuckets =
     scenarios.mapPoolsByNodeType[nodeType === 'BOSS' ? 'BOSS' : nodeType === 'ELITE' ? 'ELITE' : 'BATTLE'];
@@ -220,7 +246,7 @@ export function createScenario(
   const difficultyTier = Math.max(1, runState.difficultyTier);
   const objectiveType = selectObjectiveType(nodeId, nodeType, runState);
   const selectedObjectiveSeed = objectiveSeed(nodeId, nodeType, runState);
-  const mapId = resolveMapId(nodeType, runState, rng);
+  const mapId = resolveMapId(nodeType, objectiveType, runState, rng);
   const enemySquads = resolveEnemySquads(
     nodeType,
     objectiveType,
@@ -241,6 +267,8 @@ export function createScenario(
   const holdoutMaxWaves = objectiveType === 'HOLDOUT' ? objectives.holdout.maxWaves : undefined;
   const escortTimeLimitSeconds =
     objectiveType === 'ESCORT' ? Math.max(110, objectives.escort.timeLimitSeconds - difficultyTier * 4) : undefined;
+  const siegeTimeLimitSeconds =
+    objectiveType === 'SIEGE' ? Math.max(120, objectives.siege.timeLimitSeconds - difficultyTier * 4) : undefined;
 
   return {
     nodeId,
@@ -252,6 +280,7 @@ export function createScenario(
     holdoutWaveInterval,
     holdoutMaxWaves,
     escortTimeLimitSeconds,
+    siegeTimeLimitSeconds,
     objectiveSeed: selectedObjectiveSeed,
     difficultyTier,
     difficultyMode: runState.difficultyMode,

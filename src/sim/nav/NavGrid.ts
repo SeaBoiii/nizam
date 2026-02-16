@@ -15,6 +15,7 @@ export class NavGrid {
   private readonly distance: Float32Array;
   private readonly neighbors: Int32Array;
   private searchToken = 1;
+  private version = 0;
 
   constructor(width: number, height: number, cellSize: number, obstacles: readonly TerrainRect[]) {
     this.width = Math.max(1, width);
@@ -47,6 +48,11 @@ export class NavGrid {
         }
       }
     }
+    this.version += 1;
+  }
+
+  getVersion(): number {
+    return this.version;
   }
 
   worldToCell(x: number, y: number): number {

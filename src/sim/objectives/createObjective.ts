@@ -9,6 +9,7 @@ import { AssassinateObjective } from './AssassinateObjective';
 import { CapturePointObjective } from './CapturePointObjective';
 import { EscortObjective } from './EscortObjective';
 import { HoldoutObjective } from './HoldoutObjective';
+import { SiegeObjective } from './SiegeObjective';
 
 export function createObjectiveForScenario(
   scenario: BattleScenario,
@@ -69,6 +70,23 @@ export function createObjectiveForScenario(
         caravanRadius: objectives.escort.caravanRadius,
         exitRadius: exitObj.radius,
         exitHoldSeconds: objectives.escort.exitHoldSeconds,
+      });
+    }
+    case 'SIEGE': {
+      const gateZone = mapState.getGateZone();
+      const courtyardZone = mapState.getCourtyardZone();
+      return new SiegeObjective({
+        id: `objective_${scenario.nodeId}`,
+        gateZoneCenter: new Vec2(gateZone.x, gateZone.y),
+        gateZoneRadius: gateZone.radius,
+        courtyardZoneCenter: new Vec2(courtyardZone.x, courtyardZone.y),
+        courtyardZoneRadius: courtyardZone.radius,
+        gateId: mapState.getPrimaryGateId(),
+        timeLimitSeconds: scenario.siegeTimeLimitSeconds ?? objectives.siege.timeLimitSeconds,
+        gateCaptureRate: objectives.siege.gateCaptureRate,
+        courtyardCaptureRate: objectives.siege.courtyardCaptureRate,
+        contestedDecayRate: objectives.siege.contestedDecayRate,
+        opposingProgressDrainFactor: objectives.siege.opposingProgressDrainFactor,
       });
     }
   }

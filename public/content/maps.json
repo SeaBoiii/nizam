@@ -64,6 +64,49 @@
         { "type": "FOREST_RECT", "x": 1010, "y": 590, "w": 330, "h": 230 },
         { "type": "HILL_RECT", "x": 1500, "y": 420, "w": 250, "h": 200 }
       ]
+    },
+    {
+      "id": "siege_gatehouse",
+      "name": "Siege Gatehouse",
+      "size": { "w": 2400, "h": 1500 },
+      "spawns": {
+        "blue": [
+          { "x": 1480, "y": 740 },
+          { "x": 1600, "y": 610 },
+          { "x": 1600, "y": 870 },
+          { "x": 1730, "y": 740 }
+        ],
+        "red": [
+          { "x": 360, "y": 740 },
+          { "x": 280, "y": 610 },
+          { "x": 280, "y": 870 },
+          { "x": 180, "y": 740 },
+          { "x": 450, "y": 520 }
+        ]
+      },
+      "objectives": {
+        "capturePoint": { "x": 1110, "y": 740, "radius": 140 },
+        "exitZone": { "x": 2190, "y": 740, "radius": 150 },
+        "gateZone": { "x": 1110, "y": 740, "radius": 145 },
+        "courtyardZone": { "x": 1650, "y": 740, "radius": 180 }
+      },
+      "terrain": [
+        { "type": "OBSTACLE_RECT", "x": 0, "y": 0, "w": 2400, "h": 48 },
+        { "type": "OBSTACLE_RECT", "x": 0, "y": 1452, "w": 2400, "h": 48 },
+        { "type": "OBSTACLE_RECT", "x": 0, "y": 48, "w": 48, "h": 1404 },
+        { "type": "OBSTACLE_RECT", "x": 2352, "y": 48, "w": 48, "h": 1404 },
+        { "type": "OBSTACLE_RECT", "x": 980, "y": 220, "w": 190, "h": 430 },
+        { "type": "OBSTACLE_RECT", "x": 980, "y": 840, "w": 190, "h": 430 },
+        { "type": "OBSTACLE_RECT", "x": 1180, "y": 220, "w": 190, "h": 430 },
+        { "type": "OBSTACLE_RECT", "x": 1180, "y": 840, "w": 190, "h": 430 },
+        { "type": "OBSTACLE_RECT", "x": 980, "y": 48, "w": 390, "h": 172 },
+        { "type": "OBSTACLE_RECT", "x": 980, "y": 1270, "w": 390, "h": 182 },
+        { "type": "GATE_RECT", "id": "main_gate", "x": 1085, "y": 650, "w": 180, "h": 190 },
+        { "type": "HILL_RECT", "x": 1500, "y": 260, "w": 250, "h": 170 },
+        { "type": "HILL_RECT", "x": 1500, "y": 1070, "w": 250, "h": 170 },
+        { "type": "FOREST_RECT", "x": 300, "y": 250, "w": 260, "h": 230 },
+        { "type": "FOREST_RECT", "x": 300, "y": 1020, "w": 260, "h": 230 }
+      ]
     }
   ],
   "terrainRules": {

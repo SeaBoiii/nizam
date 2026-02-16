@@ -8,6 +8,7 @@ import type { UnitArchetype } from '../types/UnitArchetype';
 import type { Vec2 } from '../../utils/vec2';
 import type { BattleObjectiveType } from './ObjectiveTypes';
 import type { BattleMapState } from '../map/MapState';
+import type { GameEvents } from '../events/GameEvents';
 
 export interface ObjectiveHUDState {
   title: string;
@@ -27,6 +28,14 @@ export interface ObjectiveTacticalState {
   caravan: Soldier | null;
   exitPosition: Vec2 | null;
   exitRadius: number;
+  siegeStage: 'GATEHOUSE' | 'COURTYARD' | null;
+  gateZonePosition: Vec2 | null;
+  gateZoneRadius: number;
+  courtyardZonePosition: Vec2 | null;
+  courtyardZoneRadius: number;
+  gateOpen: boolean;
+  attackerTeam: TeamId | null;
+  defenderTeam: TeamId | null;
 }
 
 export interface ObjectiveMinimapMarker {
@@ -53,6 +62,7 @@ export interface ObjectiveWorld {
   scenario: BattleScenario;
   bounds: WorldBounds;
   mapState: BattleMapState;
+  events: GameEvents;
   objectiveCenter: Vec2;
   simTime: number;
   squads: Squad[];

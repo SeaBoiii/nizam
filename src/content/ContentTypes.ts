@@ -89,6 +89,7 @@ export interface ObjectiveSelectionWeights {
   ASSASSINATE: number;
   HOLDOUT: number;
   ESCORT: number;
+  SIEGE: number;
 }
 
 export interface CaptureObjectiveTuningContent {
@@ -126,12 +127,23 @@ export interface EscortObjectiveTuningContent {
   exitJitterY: number;
 }
 
+export interface SiegeObjectiveTuningContent {
+  timeLimitSeconds: number;
+  gateCaptureRate: number;
+  courtyardCaptureRate: number;
+  contestedDecayRate: number;
+  opposingProgressDrainFactor: number;
+  eliteDepthMin: number;
+  eliteChance: number;
+}
+
 export interface ObjectivesTuningContent {
   contentVersion: string;
   selectionWeightsByNodeType: Record<'BATTLE' | 'ELITE' | 'BOSS', ObjectiveSelectionWeights>;
   capture: CaptureObjectiveTuningContent;
   holdout: HoldoutObjectiveTuningContent;
   escort: EscortObjectiveTuningContent;
+  siege: SiegeObjectiveTuningContent;
 }
 
 export interface NodeTypeWeights {
@@ -224,12 +236,14 @@ export interface ScenariosContent {
   objectivePowerScale: Record<BattleObjectiveType, number>;
   mapPoolsByNodeType: Record<'BATTLE' | 'ELITE' | 'BOSS', ScenarioDepthBucketMapPoolContent[]>;
   templatesByNodeType: Record<'BATTLE' | 'ELITE' | 'BOSS', ScenarioDepthBucketContent[]>;
+  siegeTemplates: ScenarioDepthBucketContent[];
 }
 
-export type MapTerrainEntryType = 'OBSTACLE_RECT' | 'FOREST_RECT' | 'HILL_RECT';
+export type MapTerrainEntryType = 'OBSTACLE_RECT' | 'FOREST_RECT' | 'HILL_RECT' | 'GATE_RECT';
 
 export interface MapTerrainEntryContent {
   type: MapTerrainEntryType;
+  id?: string;
   x: number;
   y: number;
   w: number;
@@ -261,6 +275,8 @@ export interface BattleMapContent {
   objectives: {
     capturePoint: MapObjectiveCircleContent;
     exitZone: MapObjectiveCircleContent;
+    gateZone?: MapObjectiveCircleContent;
+    courtyardZone?: MapObjectiveCircleContent;
   };
   terrain: MapTerrainEntryContent[];
 }

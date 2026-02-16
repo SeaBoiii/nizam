@@ -399,18 +399,21 @@ export const DEFAULT_OBJECTIVES_CONTENT: ObjectivesTuningContent = {
       ASSASSINATE: 0.15,
       HOLDOUT: 0.15,
       ESCORT: 0.15,
+      SIEGE: 0,
     },
     ELITE: {
-      CAPTURE: 0.5,
-      ASSASSINATE: 0.5,
+      CAPTURE: 0.42,
+      ASSASSINATE: 0.42,
       HOLDOUT: 0,
       ESCORT: 0,
+      SIEGE: 0.16,
     },
     BOSS: {
       CAPTURE: 0.4,
       ASSASSINATE: 0.6,
       HOLDOUT: 0,
       ESCORT: 0,
+      SIEGE: 0,
     },
   },
   capture: {
@@ -448,6 +451,15 @@ export const DEFAULT_OBJECTIVES_CONTENT: ObjectivesTuningContent = {
     exitXPadding: 220,
     startJitterY: 180,
     exitJitterY: 220,
+  },
+  siege: {
+    timeLimitSeconds: 240,
+    gateCaptureRate: 0.95,
+    courtyardCaptureRate: 0.82,
+    contestedDecayRate: 0.3,
+    opposingProgressDrainFactor: 0.42,
+    eliteDepthMin: 7,
+    eliteChance: 0.38,
   },
 };
 
@@ -656,6 +668,49 @@ export const DEFAULT_MAPS_CONTENT: MapsContent = {
         { type: 'HILL_RECT', x: 1500, y: 420, w: 250, h: 200 },
       ],
     },
+    {
+      id: 'siege_gatehouse',
+      name: 'Siege Gatehouse',
+      size: { w: 2400, h: 1500 },
+      spawns: {
+        blue: [
+          { x: 1480, y: 740 },
+          { x: 1600, y: 610 },
+          { x: 1600, y: 870 },
+          { x: 1730, y: 740 },
+        ],
+        red: [
+          { x: 360, y: 740 },
+          { x: 280, y: 610 },
+          { x: 280, y: 870 },
+          { x: 180, y: 740 },
+          { x: 450, y: 520 },
+        ],
+      },
+      objectives: {
+        capturePoint: { x: 1110, y: 740, radius: 140 },
+        exitZone: { x: 2190, y: 740, radius: 150 },
+        gateZone: { x: 1110, y: 740, radius: 145 },
+        courtyardZone: { x: 1650, y: 740, radius: 180 },
+      },
+      terrain: [
+        { type: 'OBSTACLE_RECT', x: 0, y: 0, w: 2400, h: 48 },
+        { type: 'OBSTACLE_RECT', x: 0, y: 1452, w: 2400, h: 48 },
+        { type: 'OBSTACLE_RECT', x: 0, y: 48, w: 48, h: 1404 },
+        { type: 'OBSTACLE_RECT', x: 2352, y: 48, w: 48, h: 1404 },
+        { type: 'OBSTACLE_RECT', x: 980, y: 220, w: 190, h: 430 },
+        { type: 'OBSTACLE_RECT', x: 980, y: 840, w: 190, h: 430 },
+        { type: 'OBSTACLE_RECT', x: 1180, y: 220, w: 190, h: 430 },
+        { type: 'OBSTACLE_RECT', x: 1180, y: 840, w: 190, h: 430 },
+        { type: 'OBSTACLE_RECT', x: 980, y: 48, w: 390, h: 172 },
+        { type: 'OBSTACLE_RECT', x: 980, y: 1270, w: 390, h: 182 },
+        { type: 'GATE_RECT', id: 'main_gate', x: 1085, y: 650, w: 180, h: 190 },
+        { type: 'HILL_RECT', x: 1500, y: 260, w: 250, h: 170 },
+        { type: 'HILL_RECT', x: 1500, y: 1070, w: 250, h: 170 },
+        { type: 'FOREST_RECT', x: 300, y: 250, w: 260, h: 230 },
+        { type: 'FOREST_RECT', x: 300, y: 1020, w: 260, h: 230 },
+      ],
+    },
   ],
 };
 
@@ -666,6 +721,7 @@ export const DEFAULT_SCENARIOS_CONTENT: ScenariosContent = {
     ASSASSINATE: 1,
     HOLDOUT: 0.72,
     ESCORT: 0.9,
+    SIEGE: 1.08,
   },
   mapPoolsByNodeType: {
     BATTLE: [
@@ -700,11 +756,21 @@ export const DEFAULT_SCENARIOS_CONTENT: ScenariosContent = {
     ELITE: [
       {
         depthMin: 0,
-        depthMax: 99,
+        depthMax: 6,
         maps: [
           { id: 'open_field', weight: 0.3 },
           { id: 'bridge_crossing', weight: 0.35 },
           { id: 'forest_pass', weight: 0.35 },
+        ],
+      },
+      {
+        depthMin: 7,
+        depthMax: 99,
+        maps: [
+          { id: 'open_field', weight: 0.18 },
+          { id: 'bridge_crossing', weight: 0.32 },
+          { id: 'forest_pass', weight: 0.3 },
+          { id: 'siege_gatehouse', weight: 0.2 },
         ],
       },
     ],
@@ -859,4 +925,47 @@ export const DEFAULT_SCENARIOS_CONTENT: ScenariosContent = {
       },
     ],
   },
+  siegeTemplates: [
+    {
+      depthMin: 0,
+      depthMax: 6,
+      templates: [
+        {
+          id: 'siege_early_a',
+          squads: [
+            { archetypeId: 'infantry', tier: 2, size: 30 },
+            { archetypeId: 'infantry', tier: 2, size: 28 },
+            { archetypeId: 'spearmen', tier: 2, size: 26 },
+            { archetypeId: 'archers', tier: 2, size: 24 },
+          ],
+        },
+      ],
+    },
+    {
+      depthMin: 7,
+      depthMax: 99,
+      templates: [
+        {
+          id: 'siege_late_a',
+          squads: [
+            { archetypeId: 'infantry', tier: 3, size: 34 },
+            { archetypeId: 'infantry', tier: 3, size: 30 },
+            { archetypeId: 'spearmen', tier: 3, size: 28 },
+            { archetypeId: 'archers', tier: 2, size: 26 },
+            { archetypeId: 'cavalry', tier: 2, size: 18 },
+          ],
+        },
+        {
+          id: 'siege_late_b',
+          squads: [
+            { archetypeId: 'infantry', tier: 3, size: 32 },
+            { archetypeId: 'spearmen', tier: 3, size: 30 },
+            { archetypeId: 'archers', tier: 3, size: 26 },
+            { archetypeId: 'archers', tier: 2, size: 22 },
+            { archetypeId: 'cavalry', tier: 2, size: 20 },
+          ],
+        },
+      ],
+    },
+  ],
 };

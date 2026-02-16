@@ -1,5 +1,6 @@
 import type { BattleMapContent, MapTerrainEntryContent, TerrainRulesContent } from '../../content/ContentTypes';
 import { Vec2 } from '../../utils/vec2';
+import { Gates, type GateState } from './Gates';
 import {
   containsRectPoint,
   mapEntryToTerrainType,
@@ -15,6 +16,8 @@ export interface MapObjectiveCircle {
   radius: number;
 }
 
+export type MapObjectiveKey = 'capturePoint' | 'exitZone' | 'gateZone' | 'courtyardZone';
+
 export class BattleMapState {
   readonly id: string;
   readonly name: string;
@@ -28,13 +31,21 @@ export class BattleMapState {
   private readonly redSpawns: Vec2[];
   private readonly capturePoint: MapObjectiveCircle;
   private readonly exitZone: MapObjectiveCircle;
+  private readonly gateZone: MapObjectiveCircle;
+  private readonly courtyardZone: MapObjectiveCircle;
 
   private readonly allTerrain: TerrainFeature[] = [];
   private readonly obstacles: TerrainRect[] = [];
   private readonly forests: TerrainRect[] = [];
   private readonly hills: TerrainRect[] = [];
+  private readonly gates = new Gates();
+
+  private readonly blockedObstacleRects: TerrainRect[] = [];
+  private blockedCacheDirty = true;
 
   private readonly terrainFlags: TerrainFlags = { inForest: false, onHill: false };
+  private navRevision = 0;
+  private visualRevision = 0;
 
   constructor(map: BattleMapContent, terrainRules: TerrainRulesContent, cellSize: number) {
     this.id = map.id;
@@ -68,8 +79,22 @@ export class BattleMapState {
       radius: Math.max(40, map.objectives.exitZone.radius),
     };
 
+    const gateSource = map.objectives.gateZone ?? map.objectives.capturePoint;
+    this.gateZone = {
+      x: gateSource.x,
+      y: gateSource.y,
+      radius: Math.max(40, gateSource.radius),
+    };
+
+    const courtyardSource = map.objectives.courtyardZone ?? map.objectives.capturePoint;
+    this.courtyardZone = {
+      x: courtyardSource.x,
+      y: courtyardSource.y,
+      radius: Math.max(40, courtyardSource.radius),
+    };
+
     for (let i = 0; i < map.terrain.length; i += 1) {
-      this.addTerrainEntry(map.terrain[i]);
+      this.addTerrainEntry(map.terrain[i], i);
     }
   }
 
@@ -89,11 +114,31 @@ export class BattleMapState {
     };
   }
 
-  getObjectivePos(type: 'capturePoint' | 'exitZone', out: Vec2): Vec2 {
+  getGateZone(): MapObjectiveCircle {
+    return {
+      x: this.gateZone.x,
+      y: this.gateZone.y,
+      radius: this.gateZone.radius,
+    };
+  }
+
+  getCourtyardZone(): MapObjectiveCircle {
+    return {
+      x: this.courtyardZone.x,
+      y: this.courtyardZone.y,
+      radius: this.courtyardZone.radius,
+    };
+  }
+
+  getObjectivePos(type: MapObjectiveKey, out: Vec2): Vec2 {
     if (type === 'capturePoint') {
       out.set(this.capturePoint.x, this.capturePoint.y);
-    } else {
+    } else if (type === 'exitZone') {
       out.set(this.exitZone.x, this.exitZone.y);
+    } else if (type === 'gateZone') {
+      out.set(this.gateZone.x, this.gateZone.y);
+    } else {
+      out.set(this.courtyardZone.x, this.courtyardZone.y);
     }
     return out;
   }
@@ -113,6 +158,13 @@ export class BattleMapState {
     return this.obstacles;
   }
 
+  getBlockedObstacleRects(): readonly TerrainRect[] {
+    if (this.blockedCacheDirty) {
+      this.rebuildBlockedObstacleCache();
+    }
+    return this.blockedObstacleRects;
+  }
+
   getForestRects(): readonly TerrainRect[] {
     return this.forests;
   }
@@ -121,13 +173,64 @@ export class BattleMapState {
     return this.hills;
   }
 
+  getGateStates(): readonly GateState[] {
+    return this.gates.getAll();
+  }
+
+  getPrimaryGateId(fallback = 'main_gate'): string {
+    const gates = this.gates.getAll();
+    if (gates.length > 0) {
+      return gates[0].id;
+    }
+    return fallback;
+  }
+
   getAllTerrain(): readonly TerrainFeature[] {
     return this.allTerrain;
   }
 
+  getNavRevision(): number {
+    return this.navRevision;
+  }
+
+  getVisualRevision(): number {
+    return this.visualRevision;
+  }
+
+  isGateOpen(gateId: string): boolean {
+    return this.gates.isOpen(gateId);
+  }
+
+  openGate(gateId: string): boolean {
+    const changed = this.gates.setOpen(gateId, true);
+    if (changed) {
+      this.markGateStateChanged();
+    }
+    return changed;
+  }
+
+  closeGate(gateId: string): boolean {
+    const changed = this.gates.setOpen(gateId, false);
+    if (changed) {
+      this.markGateStateChanged();
+    }
+    return changed;
+  }
+
+  getGateCenter(gateId: string, out: Vec2): boolean {
+    const gate = this.gates.getById(gateId);
+    if (gate === null) {
+      return false;
+    }
+    out.x = gate.rect.x + gate.rect.w * 0.5;
+    out.y = gate.rect.y + gate.rect.h * 0.5;
+    return true;
+  }
+
   isBlocked(x: number, y: number, padding = 0): boolean {
-    for (let i = 0; i < this.obstacles.length; i += 1) {
-      const rect = this.obstacles[i];
+    const rects = this.getBlockedObstacleRects();
+    for (let i = 0; i < rects.length; i += 1) {
+      const rect = rects[i];
       if (
         x >= rect.x - padding &&
         x <= rect.x + rect.w + padding &&
@@ -141,8 +244,9 @@ export class BattleMapState {
   }
 
   isLineBlocked(x0: number, y0: number, x1: number, y1: number): boolean {
-    for (let i = 0; i < this.obstacles.length; i += 1) {
-      if (segmentIntersectsRect(x0, y0, x1, y1, this.obstacles[i])) {
+    const rects = this.getBlockedObstacleRects();
+    for (let i = 0; i < rects.length; i += 1) {
+      if (segmentIntersectsRect(x0, y0, x1, y1, rects[i])) {
         return true;
       }
     }
@@ -211,11 +315,12 @@ export class BattleMapState {
   pushOutOfObstacles(pos: Vec2, radius: number): boolean {
     let moved = false;
     const inflation = Math.max(0, radius);
+    const rects = this.getBlockedObstacleRects();
 
     for (let pass = 0; pass < 3; pass += 1) {
       let passMoved = false;
-      for (let i = 0; i < this.obstacles.length; i += 1) {
-        const rect = this.obstacles[i];
+      for (let i = 0; i < rects.length; i += 1) {
+        const rect = rects[i];
         const left = rect.x - inflation;
         const right = rect.x + rect.w + inflation;
         const top = rect.y - inflation;
@@ -253,7 +358,7 @@ export class BattleMapState {
     return moved;
   }
 
-  private addTerrainEntry(entry: MapTerrainEntryContent): void {
+  private addTerrainEntry(entry: MapTerrainEntryContent, index: number): void {
     const rect: TerrainRect = {
       x: entry.x,
       y: entry.y,
@@ -265,12 +370,43 @@ export class BattleMapState {
       type,
       rect,
     });
+
     if (type === 'OBSTACLE') {
       this.obstacles.push(rect);
-    } else if (type === 'FOREST') {
-      this.forests.push(rect);
-    } else {
-      this.hills.push(rect);
+      this.blockedCacheDirty = true;
+      return;
     }
+    if (type === 'FOREST') {
+      this.forests.push(rect);
+      return;
+    }
+    if (type === 'HILL') {
+      this.hills.push(rect);
+      return;
+    }
+
+    const gateId = entry.id ?? `gate_${index}`;
+    this.gates.addGate(gateId, rect, false);
+    this.blockedCacheDirty = true;
+  }
+
+  private markGateStateChanged(): void {
+    this.blockedCacheDirty = true;
+    this.navRevision += 1;
+    this.visualRevision += 1;
+  }
+
+  private rebuildBlockedObstacleCache(): void {
+    this.blockedObstacleRects.length = 0;
+    for (let i = 0; i < this.obstacles.length; i += 1) {
+      this.blockedObstacleRects.push(this.obstacles[i]);
+    }
+
+    const closedGates = this.gates.getClosedRects();
+    for (let i = 0; i < closedGates.length; i += 1) {
+      this.blockedObstacleRects.push(closedGates[i]);
+    }
+
+    this.blockedCacheDirty = false;
   }
 }

@@ -13,6 +13,7 @@ export interface BattleScenario {
   holdoutWaveInterval?: number;
   holdoutMaxWaves?: number;
   escortTimeLimitSeconds?: number;
+  siegeTimeLimitSeconds?: number;
   objectiveSeed: number;
   difficultyTier: number;
   difficultyMode: DifficultyMode;

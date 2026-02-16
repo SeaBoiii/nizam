@@ -90,6 +90,7 @@ If a content file is missing or invalid, the game falls back to built-in default
 - Battles now load handcrafted maps from `public/content/maps.json`.
 - Terrain types:
   - `OBSTACLE_RECT`: impassable blocks (units route around, cannot pass through).
+  - `GATE_RECT`: siege gate obstacle (closed at start, opens during Siege stage transition).
   - `FOREST_RECT`: movement slow and ranged accuracy penalty for shooters inside forest.
   - `HILL_RECT`: ranged range and accuracy bonus for shooters on hill tiles.
 - Navigation uses a lightweight nav grid + flow-field steering:
@@ -99,6 +100,7 @@ If a content file is missing or invalid, the game falls back to built-in default
   - `open_field`
   - `bridge_crossing`
   - `forest_pass`
+  - `siege_gatehouse`
 - Map selection is deterministic per node and seed, using scenario content pools in `public/content/scenarios.json`.
 - Terrain overlays are rendered in-battle and minimap shows obstacle silhouettes.
 
@@ -194,8 +196,25 @@ If a content file is missing or invalid, the game falls back to built-in default
 - `Decapitation` (`ASSASSINATE`): kill the enemy commander before yours dies.
 - `Last Stand` (`HOLDOUT`): survive the timer while enemy reinforcement waves attack.
 - `Caravan Run` (`ESCORT`): protect the caravan to the exit zone.
+- `Siege` (`SIEGE`): two-stage assault. Stage 1 capture the gate zone to open the gate, then Stage 2 capture the courtyard before time expires.
 - Overworld battle nodes now preview objective type in the tooltip.
 - Objective variants are selected deterministically from run seed + node id.
+
+## Siege mode (Sprint 10)
+
+- Added iconic siege map: `siege_gatehouse` in `public/content/maps.json`.
+- Gate mechanic:
+  - Gate terrain uses `GATE_RECT` with id `main_gate`.
+  - Closed gate blocks movement/nav until Stage 1 is captured.
+  - On gate open, nav grid rebuilds and squad flow-fields refresh so units re-route through the breach.
+- Siege objective tuning lives in `public/content/objectives.json` under `siege`:
+  - `timeLimitSeconds`
+  - `gateCaptureRate`
+  - `courtyardCaptureRate`
+  - `contestedDecayRate`
+  - `opposingProgressDrainFactor`
+  - `eliteDepthMin` / `eliteChance` (late-elite appearance tuning)
+- Siege enemy compositions are data-driven in `public/content/scenarios.json` under `siegeTemplates`.
 
 ## Debug panel
 

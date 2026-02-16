@@ -32,6 +32,12 @@ export interface BattleEndEvent {
   winnerTeamId: TeamId;
 }
 
+export interface GateOpenedEvent {
+  gateId: string;
+  x: number;
+  y: number;
+}
+
 type Listener<T> = (event: T) => void;
 
 export class GameEvents {
@@ -45,12 +51,15 @@ export class GameEvents {
   private readonly squadRoutedPool: SquadRoutedEvent[] = [];
   private readonly battleEnd: BattleEndEvent[] = [];
   private readonly battleEndPool: BattleEndEvent[] = [];
+  private readonly gateOpened: GateOpenedEvent[] = [];
+  private readonly gateOpenedPool: GateOpenedEvent[] = [];
 
   private readonly orderListeners: Listener<OrderIssuedEvent>[] = [];
   private readonly projectileListeners: Listener<ProjectileFiredEvent>[] = [];
   private readonly damageListeners: Listener<DamageEvent>[] = [];
   private readonly routedListeners: Listener<SquadRoutedEvent>[] = [];
   private readonly battleEndListeners: Listener<BattleEndEvent>[] = [];
+  private readonly gateOpenedListeners: Listener<GateOpenedEvent>[] = [];
 
   beginTick(): void {
     this.recycleOrders();
@@ -58,6 +67,7 @@ export class GameEvents {
     this.recycleSimple(this.damage, this.damagePool);
     this.recycleSimple(this.squadRouted, this.squadRoutedPool);
     this.recycleSimple(this.battleEnd, this.battleEndPool);
+    this.recycleSimple(this.gateOpened, this.gateOpenedPool);
   }
 
   emitOrderIssued(teamId: TeamId, orderType: OrderMode, squadIds: Iterable<number>): void {
@@ -104,12 +114,21 @@ export class GameEvents {
     this.battleEnd.push(event);
   }
 
+  emitGateOpened(gateId: string, x: number, y: number): void {
+    const event = this.gateOpenedPool.pop() ?? { gateId, x, y };
+    event.gateId = gateId;
+    event.x = x;
+    event.y = y;
+    this.gateOpened.push(event);
+  }
+
   dispatch(): void {
     this.dispatchList(this.orderIssued, this.orderListeners);
     this.dispatchList(this.projectileFired, this.projectileListeners);
     this.dispatchList(this.damage, this.damageListeners);
     this.dispatchList(this.squadRouted, this.routedListeners);
     this.dispatchList(this.battleEnd, this.battleEndListeners);
+    this.dispatchList(this.gateOpened, this.gateOpenedListeners);
   }
 
   onOrderIssued(listener: Listener<OrderIssuedEvent>): () => void {
@@ -135,6 +154,11 @@ export class GameEvents {
   onBattleEnd(listener: Listener<BattleEndEvent>): () => void {
     this.battleEndListeners.push(listener);
     return () => this.removeListener(this.battleEndListeners, listener);
+  }
+
+  onGateOpened(listener: Listener<GateOpenedEvent>): () => void {
+    this.gateOpenedListeners.push(listener);
+    return () => this.removeListener(this.gateOpenedListeners, listener);
   }
 
   private dispatchList<T>(events: T[], listeners: Listener<T>[]): void {
@@ -172,4 +196,3 @@ export class GameEvents {
     }
   }
 }
-

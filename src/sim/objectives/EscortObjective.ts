@@ -101,6 +101,14 @@ export class EscortObjective implements IObjective {
       caravan: null,
       exitPosition: this.exit,
       exitRadius: this.exitRadius,
+      siegeStage: null,
+      gateZonePosition: null,
+      gateZoneRadius: 0,
+      courtyardZonePosition: null,
+      courtyardZoneRadius: 0,
+      gateOpen: false,
+      attackerTeam: null,
+      defenderTeam: null,
     };
   }
 

@@ -170,6 +170,15 @@ function cloneObjectivesContent(content: ObjectivesTuningContent): ObjectivesTun
       startJitterY: content.escort.startJitterY,
       exitJitterY: content.escort.exitJitterY,
     },
+    siege: {
+      timeLimitSeconds: content.siege.timeLimitSeconds,
+      gateCaptureRate: content.siege.gateCaptureRate,
+      courtyardCaptureRate: content.siege.courtyardCaptureRate,
+      contestedDecayRate: content.siege.contestedDecayRate,
+      opposingProgressDrainFactor: content.siege.opposingProgressDrainFactor,
+      eliteDepthMin: content.siege.eliteDepthMin,
+      eliteChance: content.siege.eliteChance,
+    },
   };
 }
 
@@ -258,6 +267,7 @@ function cloneScenariosContent(content: ScenariosContent): ScenariosContent {
       ELITE: cloneBuckets(content.templatesByNodeType.ELITE),
       BOSS: cloneBuckets(content.templatesByNodeType.BOSS),
     },
+    siegeTemplates: cloneBuckets(content.siegeTemplates),
   };
 }
 
@@ -282,9 +292,12 @@ function cloneMapEntry(map: BattleMapContent): BattleMapContent {
     objectives: {
       capturePoint: { ...map.objectives.capturePoint },
       exitZone: { ...map.objectives.exitZone },
+      gateZone: map.objectives.gateZone ? { ...map.objectives.gateZone } : undefined,
+      courtyardZone: map.objectives.courtyardZone ? { ...map.objectives.courtyardZone } : undefined,
     },
     terrain: map.terrain.map((terrain) => ({
       type: terrain.type,
+      id: terrain.id,
       x: terrain.x,
       y: terrain.y,
       w: terrain.w,
@@ -512,7 +525,8 @@ function hasObjectiveWeights(value: unknown): boolean {
     isFiniteNumber(candidate.CAPTURE) &&
     isFiniteNumber(candidate.ASSASSINATE) &&
     isFiniteNumber(candidate.HOLDOUT) &&
-    isFiniteNumber(candidate.ESCORT)
+    isFiniteNumber(candidate.ESCORT) &&
+    isFiniteNumber(candidate.SIEGE)
   );
 }
 
@@ -526,8 +540,9 @@ function isValidObjectivesContent(value: unknown): value is ObjectivesTuningCont
   const capture = asObject(candidate.capture);
   const holdout = asObject(candidate.holdout);
   const escort = asObject(candidate.escort);
+  const siege = asObject(candidate.siege);
 
-  if (!selection || !capture || !holdout || !escort) {
+  if (!selection || !capture || !holdout || !escort || !siege) {
     return false;
   }
 
@@ -581,6 +596,18 @@ function isValidObjectivesContent(value: unknown): value is ObjectivesTuningCont
     !isFiniteNumber(escort.exitXPadding) ||
     !isFiniteNumber(escort.startJitterY) ||
     !isFiniteNumber(escort.exitJitterY)
+  ) {
+    return false;
+  }
+
+  if (
+    !isFiniteNumber(siege.timeLimitSeconds) ||
+    !isFiniteNumber(siege.gateCaptureRate) ||
+    !isFiniteNumber(siege.courtyardCaptureRate) ||
+    !isFiniteNumber(siege.contestedDecayRate) ||
+    !isFiniteNumber(siege.opposingProgressDrainFactor) ||
+    !isFiniteNumber(siege.eliteDepthMin) ||
+    !isFiniteNumber(siege.eliteChance)
   ) {
     return false;
   }
@@ -686,7 +713,8 @@ function isValidScenariosContent(value: unknown): value is ScenariosContent {
     !isFiniteNumber(objectivePowerScale.CAPTURE) ||
     !isFiniteNumber(objectivePowerScale.ASSASSINATE) ||
     !isFiniteNumber(objectivePowerScale.HOLDOUT) ||
-    !isFiniteNumber(objectivePowerScale.ESCORT)
+    !isFiniteNumber(objectivePowerScale.ESCORT) ||
+    !isFiniteNumber(objectivePowerScale.SIEGE)
   ) {
     return false;
   }
@@ -751,6 +779,37 @@ function isValidScenariosContent(value: unknown): value is ScenariosContent {
       }
     }
   }
+
+  if (!Array.isArray(candidate.siegeTemplates) || candidate.siegeTemplates.length === 0) {
+    return false;
+  }
+  const siegeTemplates = candidate.siegeTemplates;
+  for (let j = 0; j < siegeTemplates.length; j += 1) {
+    const bucket = asObject(siegeTemplates[j]);
+    if (!bucket || !Array.isArray(bucket.templates) || bucket.templates.length === 0) {
+      return false;
+    }
+    if (!isFiniteNumber(bucket.depthMin) || !isFiniteNumber(bucket.depthMax)) {
+      return false;
+    }
+    for (let k = 0; k < bucket.templates.length; k += 1) {
+      const template = asObject(bucket.templates[k]);
+      if (!template || typeof template.id !== 'string' || !Array.isArray(template.squads)) {
+        return false;
+      }
+      for (let m = 0; m < template.squads.length; m += 1) {
+        const squad = asObject(template.squads[m]);
+        if (
+          !squad ||
+          typeof squad.archetypeId !== 'string' ||
+          !isFiniteNumber(squad.tier) ||
+          !isFiniteNumber(squad.size)
+        ) {
+          return false;
+        }
+      }
+    }
+  }
   return true;
 }
 
@@ -759,7 +818,15 @@ function isValidMapTerrainEntry(value: unknown): boolean {
   if (!entry) {
     return false;
   }
-  if (entry.type !== 'OBSTACLE_RECT' && entry.type !== 'FOREST_RECT' && entry.type !== 'HILL_RECT') {
+  if (
+    entry.type !== 'OBSTACLE_RECT' &&
+    entry.type !== 'FOREST_RECT' &&
+    entry.type !== 'HILL_RECT' &&
+    entry.type !== 'GATE_RECT'
+  ) {
+    return false;
+  }
+  if (entry.type === 'GATE_RECT' && (typeof entry.id !== 'string' || entry.id.length === 0)) {
     return false;
   }
   return (
@@ -813,11 +880,25 @@ function isValidMapEntry(value: unknown): value is BattleMapContent {
   if (!isValidObjectiveCircle(objectives.capturePoint) || !isValidObjectiveCircle(objectives.exitZone)) {
     return false;
   }
+  if (objectives.gateZone !== undefined && !isValidObjectiveCircle(objectives.gateZone)) {
+    return false;
+  }
+  if (objectives.courtyardZone !== undefined && !isValidObjectiveCircle(objectives.courtyardZone)) {
+    return false;
+  }
 
+  let hasGateTerrain = false;
   for (let i = 0; i < map.terrain.length; i += 1) {
     if (!isValidMapTerrainEntry(map.terrain[i])) {
       return false;
     }
+    const terrain = asObject(map.terrain[i]);
+    if (terrain && terrain.type === 'GATE_RECT') {
+      hasGateTerrain = true;
+    }
+  }
+  if (hasGateTerrain && (!isValidObjectiveCircle(objectives.gateZone) || !isValidObjectiveCircle(objectives.courtyardZone))) {
+    return false;
   }
   return true;
 }

@@ -3,6 +3,8 @@ import { BattleMapState } from '../../sim/map/MapState';
 
 export class MapOverlay {
   readonly graphics: Graphics;
+  private lastMapId = '';
+  private lastVisualRevision = -1;
 
   constructor(layer: Container) {
     this.graphics = new Graphics();
@@ -10,6 +12,12 @@ export class MapOverlay {
   }
 
   draw(mapState: BattleMapState): void {
+    if (this.lastMapId === mapState.id && this.lastVisualRevision === mapState.getVisualRevision()) {
+      return;
+    }
+    this.lastMapId = mapState.id;
+    this.lastVisualRevision = mapState.getVisualRevision();
+
     this.graphics.clear();
 
     const forests = mapState.getForestRects();
@@ -42,6 +50,19 @@ export class MapOverlay {
       this.graphics.fill({ color: 0x1c2d3f, alpha: 0.82 });
       this.graphics.stroke({ color: 0x466a91, alpha: 0.75, width: 1 });
     }
+
+    const gates = mapState.getGateStates();
+    for (let i = 0; i < gates.length; i += 1) {
+      const gate = gates[i];
+      const rect = gate.rect;
+      this.graphics.roundRect(rect.x, rect.y, rect.w, rect.h, 4);
+      if (gate.isOpen) {
+        this.graphics.fill({ color: 0x5f9679, alpha: 0.22 });
+        this.graphics.stroke({ color: 0x8fd4b1, alpha: 0.95, width: 2.4 });
+      } else {
+        this.graphics.fill({ color: 0x2e3c4a, alpha: 0.9 });
+        this.graphics.stroke({ color: 0x87a9c4, alpha: 0.95, width: 2.4 });
+      }
+    }
   }
 }
-

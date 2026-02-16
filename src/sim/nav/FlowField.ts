@@ -12,6 +12,7 @@ export class FlowField {
 
   private targetCell = -1;
   private lastBuildTime = -999;
+  private lastNavVersion = -1;
   private readonly rebuildIntervalSec: number;
 
   constructor(private readonly navGrid: NavGrid, rebuildIntervalSec = 1) {
@@ -30,18 +31,22 @@ export class FlowField {
     this.dirY.fill(0);
     this.targetCell = -1;
     this.lastBuildTime = -999;
+    this.lastNavVersion = -1;
   }
 
   updateTarget(targetX: number, targetY: number, simTime: number): void {
     const rawTarget = this.navGrid.worldToCell(targetX, targetY);
     const target = this.navGrid.findNearestOpenCell(rawTarget, 10);
+    const navVersion = this.navGrid.getVersion();
+    const navChanged = navVersion !== this.lastNavVersion;
 
-    if (target === this.targetCell && simTime - this.lastBuildTime < this.rebuildIntervalSec) {
+    if (!navChanged && target === this.targetCell && simTime - this.lastBuildTime < this.rebuildIntervalSec) {
       return;
     }
 
     this.targetCell = target;
     this.lastBuildTime = simTime;
+    this.lastNavVersion = navVersion;
     this.rebuild();
   }
 
@@ -137,4 +142,3 @@ export class FlowField {
     }
   }
 }
-

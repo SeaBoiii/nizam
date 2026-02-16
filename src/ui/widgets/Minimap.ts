@@ -72,6 +72,19 @@ export class Minimap {
       this.graphics.fill({ color: 0x2b3e51, alpha: 0.85 });
     }
 
+    const gates = mapState.getGateStates();
+    for (let i = 0; i < gates.length; i += 1) {
+      const gate = gates[i];
+      const rect = gate.rect;
+      this.graphics.rect(rect.x * scaleX, rect.y * scaleY, rect.w * scaleX, rect.h * scaleY);
+      if (gate.isOpen) {
+        this.graphics.fill({ color: 0x7bc39d, alpha: 0.4 });
+      } else {
+        this.graphics.fill({ color: 0x95a9bf, alpha: 0.9 });
+      }
+      this.graphics.stroke({ color: 0x0f141a, alpha: 0.85, width: 0.8 });
+    }
+
     for (let markerIndex = 0; markerIndex < objectiveMarkers.length; markerIndex += 1) {
       const marker = objectiveMarkers[markerIndex];
       const markerX = marker.x * scaleX;
