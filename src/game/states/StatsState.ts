@@ -1,6 +1,7 @@
 import { Container, Graphics, Text } from 'pixi.js';
 import type { StatsV1 } from '../../meta/Stats';
 import { TextButton } from '../../ui/widgets/TextButton';
+import { copyTextWithFallback } from '../../utils/clipboard';
 import type { IGameState } from './IGameState';
 import type { GameStateId, StateContext } from './StateContext';
 
@@ -31,41 +32,6 @@ function topEntries(record: Record<string, number>, limit: number): Array<{ key:
     sliced.push({ key: entries[i][0], value: entries[i][1] });
   }
   return sliced;
-}
-
-async function copyTextWithFallback(text: string): Promise<boolean> {
-  if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch {
-      // fall through
-    }
-  }
-
-  if (typeof document === 'undefined') {
-    return false;
-  }
-
-  const textArea = document.createElement('textarea');
-  textArea.value = text;
-  textArea.style.position = 'fixed';
-  textArea.style.opacity = '0';
-  textArea.style.left = '-1000px';
-  textArea.style.top = '-1000px';
-  document.body.appendChild(textArea);
-  textArea.focus();
-  textArea.select();
-
-  let copied = false;
-  try {
-    copied = document.execCommand('copy');
-  } catch {
-    copied = false;
-  }
-
-  document.body.removeChild(textArea);
-  return copied;
 }
 
 export class StatsState implements IGameState {

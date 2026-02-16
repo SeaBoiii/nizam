@@ -37,6 +37,7 @@ export interface StateContext {
   markPerkOffered(choiceCount: number): void;
   markPerkPicked(perkId: string): void;
   markRunCompleted(outcome: 'WIN' | 'LOSS'): void;
+  recordDiagnosticEvent(eventType: string, payload?: Record<string, unknown>): void;
   getStatsSnapshot(): StatsV1;
   resetStatsData(): StatsV1;
   transitionTo(stateId: GameStateId, payload?: unknown): void;

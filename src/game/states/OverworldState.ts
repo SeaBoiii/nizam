@@ -250,6 +250,12 @@ export class OverworldState implements IGameState {
         runState.clearedNodeIds.push(node.id);
       }
     }
+    this.context.recordDiagnosticEvent('NODE_ENTERED', {
+      nodeId: node.id,
+      nodeType: node.type,
+      step: runState.step,
+      difficulty: runState.difficultyMode,
+    });
 
     if (isBattleNode(node.type)) {
       const scenario = createScenario(node.id, node.type, runState, armyState);

@@ -190,6 +190,21 @@ If a content file is missing or invalid, the game falls back to built-in default
   - `Copy Last Run JSON`
 - `Reset Stats` is available with confirmation on the Stats screen.
 
+## Crash diagnostics (Sprint 11.2)
+
+- Global crash overlay appears automatically on uncaught runtime errors.
+- Overlay includes:
+  - error message
+  - collapsible stack trace
+  - run context summary (seed/node/map/objective/difficulty/perks)
+  - actions: `Copy Bug Report JSON`, `Copy Stack Trace`, `Reload`
+- `Continue` is disabled by default and only enabled for whitelisted non-fatal error messages.
+- Bug reports are local-only JSON (no network calls) and include:
+  - error details
+  - current run/battle/content/settings context
+  - recent gameplay events ring buffer (last 200)
+- Paste copied bug report JSON directly into a GitHub Issue for repro/balance debugging.
+
 ## Battle objectives (Sprint 4)
 
 - `Capture Point`: classic central capture objective.

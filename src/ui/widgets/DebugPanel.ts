@@ -14,6 +14,7 @@ interface DebugPanelOptions {
   parent: Container;
   onReloadContent: () => Promise<void> | void;
   onRestartAction: () => void;
+  onForceCrash?: () => void;
 }
 
 export class DebugPanel {
@@ -48,6 +49,7 @@ export class DebugPanel {
 
   private readonly reloadButton: TextButton;
   private readonly restartButton: TextButton;
+  private readonly forceCrashButton: TextButton | null;
   private readonly onReloadContent: () => Promise<void> | void;
   private readonly onRestartAction: () => void;
 
@@ -76,9 +78,21 @@ export class DebugPanel {
       height: 34,
       onClick: () => this.onRestartAction(),
     });
+    this.forceCrashButton =
+      import.meta.env.DEV && options.onForceCrash
+        ? new TextButton({
+            label: 'Force Crash (test)',
+            width: 150,
+            height: 34,
+            onClick: () => options.onForceCrash?.(),
+          })
+        : null;
 
     this.root.addChild(this.reloadButton);
     this.root.addChild(this.restartButton);
+    if (this.forceCrashButton !== null) {
+      this.root.addChild(this.forceCrashButton);
+    }
     options.parent.addChild(this.root);
 
     this.layout(0, 0);
@@ -118,7 +132,7 @@ export class DebugPanel {
 
   private layout(screenWidth: number, _screenHeight: number): void {
     const width = 280;
-    const height = 184;
+    const height = this.forceCrashButton !== null ? 226 : 184;
     this.root.position.set(Math.max(12, screenWidth - width - 12), 12);
 
     this.bg.clear();
@@ -132,6 +146,9 @@ export class DebugPanel {
 
     this.reloadButton.position.set(10, 148);
     this.restartButton.position.set(80, 148);
+    if (this.forceCrashButton !== null) {
+      this.forceCrashButton.position.set(10, 188);
+    }
   }
 
   private async reloadContent(): Promise<void> {

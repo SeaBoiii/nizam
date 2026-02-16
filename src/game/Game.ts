@@ -2,6 +2,7 @@ import { Application, Text } from 'pixi.js';
 import { audioManager } from '../audio/AudioManager';
 import { contentManager } from '../content/ContentManager';
 import { createStartingArmy } from '../meta/Army';
+import { buildBugReport } from '../meta/BugReport';
 import { DifficultyMode } from '../meta/Difficulty';
 import { createPerkState } from '../meta/Perks';
 import { loadSettings, saveSettings, type GameSettings } from '../meta/Settings';
@@ -11,10 +12,13 @@ import { clearSave, hasSave, loadGame, saveGame } from '../meta/Save';
 import type { BattleResult, BattleScenario } from '../meta/types';
 import { generateMap } from '../overworld/generateMap';
 import type { RunState } from '../overworld/types';
+import { EventRecorder } from '../sim/events/EventRecorder';
 import type { GameEvents } from '../sim/events/GameEvents';
 import { DebugPanel } from '../ui/widgets/DebugPanel';
+import { ErrorOverlay } from '../ui/widgets/ErrorOverlay';
 import { PauseMenu } from '../ui/widgets/PauseMenu';
 import { setTextButtonClickListener } from '../ui/widgets/TextButton';
+import { ErrorBoundary, type CapturedErrorInfo } from './ErrorBoundary';
 import type { IGameState } from './states/IGameState';
 import { BattleState } from './states/BattleState';
 import { OverworldState } from './states/OverworldState';
@@ -37,6 +41,9 @@ export class Game {
 
   private readonly debugPanel: DebugPanel;
   private readonly pauseMenu: PauseMenu;
+  private readonly errorOverlay: ErrorOverlay;
+  private readonly errorBoundary: ErrorBoundary;
+  private readonly eventRecorder = new EventRecorder(200);
   private readonly contentWarningText = new Text({
     text: '',
     style: {
@@ -47,6 +54,9 @@ export class Game {
   });
 
   private readonly stateContext: StateContext;
+  private crashed = false;
+  private crashGuard = false;
+  private lastObjectiveStage: string | undefined;
 
   constructor(app: Application) {
     this.app = app;
@@ -75,10 +85,10 @@ export class Game {
       markBattleStarted: (scenario) => this.markBattleStarted(scenario),
       markBattleEnded: (result) => this.markBattleEnded(result),
       markBattleAborted: () => this.markBattleAborted(),
-      markPerkOffered: (choiceCount) => this.statsCollector.recordPerkOffered(choiceCount),
-      markPerkPicked: (perkId) =>
-        this.statsCollector.recordPerkPicked(perkId, this.campaignData ? this.campaignData.perkState : null),
+      markPerkOffered: (choiceCount) => this.markPerkOffered(choiceCount),
+      markPerkPicked: (perkId) => this.markPerkPicked(perkId),
       markRunCompleted: (outcome) => this.markRunCompleted(outcome),
+      recordDiagnosticEvent: (eventType, payload) => this.recordDiagnosticEvent(eventType, payload),
       getStatsSnapshot: () => this.statsCollector.getSnapshot(),
       resetStatsData: () => this.statsCollector.reset(),
       transitionTo: (stateId, payload) => this.transitionTo(stateId, payload),
@@ -96,6 +106,11 @@ export class Game {
       parent: this.app.stage,
       onReloadContent: () => this.reloadContent(),
       onRestartAction: () => this.handleDebugRestartAction(),
+      onForceCrash: import.meta.env.DEV
+        ? () => {
+            throw new Error('Forced crash from DebugPanel');
+          }
+        : undefined,
     });
     this.pauseMenu = new PauseMenu({
       parent: this.app.stage,
@@ -112,6 +127,11 @@ export class Game {
         this.transitionTo('STATS', { returnState });
       },
     });
+    this.errorOverlay = new ErrorOverlay(this.app.stage);
+    this.errorBoundary = new ErrorBoundary({
+      onError: (error) => this.handleGlobalError(error),
+    });
+    this.errorBoundary.install();
 
     setTextButtonClickListener(() => {
       audioManager.unlock();
@@ -125,7 +145,12 @@ export class Game {
   }
 
   private readonly tick = (): void => {
+    if (this.crashed) {
+      this.errorOverlay.layout(this.app.screen.width, this.app.screen.height);
+      return;
+    }
     if (this.currentState === null) {
+      this.errorOverlay.layout(this.app.screen.width, this.app.screen.height);
       return;
     }
 
@@ -140,6 +165,7 @@ export class Game {
     );
     this.updateDebugPanel();
     this.pauseMenu.layout(this.app.screen.width, this.app.screen.height);
+    this.errorOverlay.layout(this.app.screen.width, this.app.screen.height);
   };
 
   private transitionTo(stateId: GameStateId, payload?: unknown): void {
@@ -157,6 +183,9 @@ export class Game {
     }
 
     this.currentStateId = stateId;
+    this.eventRecorder.record('STATE_TRANSITION', {
+      to: stateId,
+    });
 
     switch (stateId) {
       case 'TITLE':
@@ -183,6 +212,7 @@ export class Game {
     this.app.stage.addChild(this.contentWarningText);
     this.app.stage.addChild(this.debugPanel.root);
     this.app.stage.addChild(this.pauseMenu.root);
+    this.app.stage.addChild(this.errorOverlay.root);
   }
 
   private startNewRun(mode: DifficultyMode = DifficultyMode.NORMAL): void {
@@ -219,7 +249,14 @@ export class Game {
 
     this.pendingScenario = null;
     this.lastBattleResult = null;
+    this.lastObjectiveStage = undefined;
+    this.eventRecorder.clear();
     this.statsCollector.onRunStarted(runState, this.campaignData.perkState);
+    this.eventRecorder.record('RUN_STARTED', {
+      seed,
+      difficulty: mode,
+      startNodeId: mapState.startNodeId,
+    });
 
     this.saveCampaignData();
   }
@@ -258,7 +295,14 @@ export class Game {
 
     this.pendingScenario = null;
     this.lastBattleResult = null;
+    this.lastObjectiveStage = undefined;
+    this.eventRecorder.clear();
     this.statsCollector.onRunLoaded(runState, loaded.perkState);
+    this.eventRecorder.record('RUN_LOADED', {
+      seed: runState.seed,
+      difficulty: runState.difficultyMode,
+      currentNodeId: runState.currentNodeId,
+    });
 
     return true;
   }
@@ -283,6 +327,7 @@ export class Game {
   }
 
   private readonly onBeforeUnload = (): void => {
+    this.errorBoundary.uninstall();
     this.saveCampaignData();
     saveSettings(this.settings);
     this.statsCollector.saveNow();
@@ -406,6 +451,11 @@ export class Game {
   }
 
   private setPaused(paused: boolean): void {
+    if (this.crashed) {
+      this.paused = true;
+      this.pauseMenu.setVisible(false);
+      return;
+    }
     if (this.currentStateId !== 'BATTLE' && this.currentStateId !== 'OVERWORLD') {
       this.paused = false;
       this.pauseMenu.setVisible(false);
@@ -419,19 +469,36 @@ export class Game {
   }
 
   private bindBattleTelemetry(events: GameEvents): () => void {
-    return this.statsCollector.bindGameEvents(events);
+    events.setRecorder(this.eventRecorder);
+    const unbindStats = this.statsCollector.bindGameEvents(events);
+    const unbindObjectiveStage = events.onObjectiveStage((event) => {
+      this.lastObjectiveStage = event.stage;
+    });
+    return () => {
+      unbindStats();
+      unbindObjectiveStage();
+      events.setRecorder(null);
+    };
   }
 
   private markBattleStarted(scenario: BattleScenario): void {
     if (this.campaignData === null) {
       return;
     }
+    this.lastObjectiveStage = undefined;
     this.statsCollector.onBattleStarted(
       scenario,
       this.campaignData.runState,
       this.campaignData.perkState,
       this.campaignData.armyState.squads,
     );
+    this.eventRecorder.record('BATTLE_STARTED', {
+      nodeId: scenario.nodeId,
+      nodeType: scenario.nodeType,
+      mapId: scenario.mapId,
+      objectiveType: scenario.objectiveType,
+      difficulty: scenario.difficultyMode,
+    });
   }
 
   private markBattleEnded(result: BattleResult): void {
@@ -440,6 +507,14 @@ export class Game {
       this.campaignData ? this.campaignData.runState : null,
       this.campaignData ? this.campaignData.perkState : null,
     );
+    this.eventRecorder.record('BATTLE_RESULT', {
+      nodeId: result.scenario.nodeId,
+      mapId: result.scenario.mapId,
+      objectiveType: result.scenario.objectiveType,
+      victory: result.victory,
+      playerRemaining: result.playerRemaining,
+      enemyRemaining: result.enemyRemaining,
+    });
     if (this.campaignData !== null && result.scenario.nodeType === 'BOSS') {
       this.statsCollector.onRunCompleted(
         this.campaignData.runState,
@@ -454,6 +529,9 @@ export class Game {
       this.campaignData ? this.campaignData.runState : null,
       this.campaignData ? this.campaignData.perkState : null,
     );
+    this.eventRecorder.record('BATTLE_ABORTED', {
+      state: this.currentStateId,
+    });
   }
 
   private markRunCompleted(outcome: 'WIN' | 'LOSS'): void {
@@ -461,5 +539,120 @@ export class Game {
       return;
     }
     this.statsCollector.onRunCompleted(this.campaignData.runState, this.campaignData.perkState, outcome);
+    this.eventRecorder.record('RUN_COMPLETED', {
+      outcome,
+      seed: this.campaignData.runState.seed,
+      step: this.campaignData.runState.step,
+    });
+  }
+
+  private markPerkOffered(choiceCount: number): void {
+    this.statsCollector.recordPerkOffered(choiceCount);
+    this.eventRecorder.record('PERK_OFFERED', {
+      choices: choiceCount,
+      state: this.currentStateId,
+    });
+  }
+
+  private markPerkPicked(perkId: string): void {
+    this.statsCollector.recordPerkPicked(perkId, this.campaignData ? this.campaignData.perkState : null);
+    this.eventRecorder.record('PERK_PICKED', {
+      perkId,
+      totalPerks: this.campaignData ? this.campaignData.perkState.pickedPerkIds.length : 0,
+    });
+  }
+
+  private recordDiagnosticEvent(eventType: string, payload?: Record<string, unknown>): void {
+    this.eventRecorder.record(eventType, payload ?? {});
+  }
+
+  private handleGlobalError(error: CapturedErrorInfo): void {
+    if (this.crashGuard) {
+      return;
+    }
+    this.crashGuard = true;
+
+    this.eventRecorder.record('ERROR_CAPTURED', {
+      source: error.source,
+      type: error.type,
+      message: error.message,
+    });
+
+    this.crashed = true;
+    this.paused = true;
+    if (this.currentState && this.currentState.setPaused) {
+      this.currentState.setPaused(true);
+    }
+    this.pauseMenu.setVisible(false);
+
+    const campaign = this.campaignData;
+    const run = campaign?.runState;
+    const perks = campaign?.perkState.pickedPerkIds ?? [];
+    const scenario = this.pendingScenario;
+    const contentStatus = contentManager.getStatus();
+    const bugReport = buildBugReport({
+      error,
+      context: {
+        state: this.currentStateId,
+        run: {
+          seed: run ? run.seed : null,
+          difficulty: run ? run.difficultyMode : 'NONE',
+          currentNodeId: run ? run.currentNodeId : '-',
+          nodesCleared: run ? run.clearedNodeIds.length : 0,
+          perksPicked: [...perks],
+        },
+        battle:
+          scenario !== null
+            ? {
+                mapId: scenario.mapId,
+                objectiveType: scenario.objectiveType,
+                stage: this.lastObjectiveStage,
+              }
+            : undefined,
+        contentStatus,
+        settings: this.settings,
+      },
+      recentEvents: this.eventRecorder.getRecentEvents(),
+      scenario,
+      lastBattleResult: this.lastBattleResult,
+    });
+
+    const message =
+      error.message && error.message.trim().length > 0 ? error.message : 'Unknown runtime error';
+    const stack = error.stack && error.stack.trim().length > 0 ? error.stack : '';
+    this.errorOverlay.show({
+      message: `${message}\n(${error.type} from ${error.source})`,
+      stack,
+      canContinue: error.canContinue,
+      context: {
+        state: this.currentStateId,
+        seed: run ? run.seed : null,
+        nodeId: run ? run.currentNodeId : '-',
+        mapId: scenario ? scenario.mapId : '-',
+        objectiveType: scenario ? scenario.objectiveType : '-',
+        difficulty: run ? run.difficultyMode : '-',
+        perksCount: perks.length,
+      },
+      bugReportJson: JSON.stringify(bugReport, null, 2),
+      onReload: () => {
+        location.reload();
+      },
+      onContinue: () => {
+        if (!error.canContinue) {
+          return;
+        }
+        this.crashed = false;
+        this.paused = false;
+        this.errorOverlay.hide();
+        this.crashGuard = false;
+      },
+    });
+    this.errorOverlay.layout(this.app.screen.width, this.app.screen.height);
+
+    if (!error.canContinue) {
+      this.crashGuard = true;
+      return;
+    }
+    this.crashGuard = false;
   }
 }

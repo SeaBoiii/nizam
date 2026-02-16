@@ -115,6 +115,7 @@ export class SiegeObjective implements IObjective {
     this.defenderInside = 0;
     this.timeRemaining = this.timeLimitSeconds;
     this.winner = null;
+    world.events.emitObjectiveStage(this.type, this.stage, this.attackerProgress);
     this.syncTacticalState(world);
     this.updateHudState(world);
   }
@@ -191,6 +192,7 @@ export class SiegeObjective implements IObjective {
       this.stage = 'COURTYARD';
       this.attackerProgress = 0;
       this.defenderProgress = 0;
+      world.events.emitObjectiveStage(this.type, this.stage, this.attackerProgress);
     } else if (this.stage === 'COURTYARD' && this.attackerProgress >= 100) {
       this.winner = this.attackerTeam === TeamId.Blue ? 'blue' : 'red';
     }
@@ -270,4 +272,3 @@ export class SiegeObjective implements IObjective {
     this.hudState.secondary = undefined;
   }
 }
-
