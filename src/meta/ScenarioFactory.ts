@@ -7,6 +7,8 @@ import type { NodeType, RunState } from '../overworld/types';
 import { SeededRng } from '../utils/rng';
 import { objectiveDisplayName, type BattleObjectiveType } from '../sim/objectives/ObjectiveTypes';
 
+const OBJECTIVE_TYPES: BattleObjectiveType[] = ['CAPTURE', 'ASSASSINATE', 'HOLDOUT', 'ESCORT', 'SIEGE'];
+
 function hashText(value: string): number {
   let hash = 2166136261 >>> 0;
   for (let i = 0; i < value.length; i += 1) {
@@ -55,6 +57,63 @@ function weightedObjective(rng: SeededRng, weights: Record<BattleObjectiveType, 
   return 'SIEGE';
 }
 
+function isObjectiveType(value: string | null): value is BattleObjectiveType {
+  if (value === null) {
+    return false;
+  }
+  for (let i = 0; i < OBJECTIVE_TYPES.length; i += 1) {
+    if (OBJECTIVE_TYPES[i] === value) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function shouldApplyStreakProtection(nodeId: string, runState: RunState): boolean {
+  return nodeId !== runState.currentNodeId;
+}
+
+function cloneObjectiveWeights(weights: Record<BattleObjectiveType, number>): Record<BattleObjectiveType, number> {
+  return {
+    CAPTURE: weights.CAPTURE,
+    ASSASSINATE: weights.ASSASSINATE,
+    HOLDOUT: weights.HOLDOUT,
+    ESCORT: weights.ESCORT,
+    SIEGE: weights.SIEGE,
+  };
+}
+
+function hasPositiveAlternativeWeight(
+  weights: Record<BattleObjectiveType, number>,
+  excludedType: BattleObjectiveType,
+): boolean {
+  for (let i = 0; i < OBJECTIVE_TYPES.length; i += 1) {
+    const type = OBJECTIVE_TYPES[i];
+    if (type === excludedType) {
+      continue;
+    }
+    if (Math.max(0, weights[type]) > 0.0001) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function applyObjectiveStreakProtection(
+  weights: Record<BattleObjectiveType, number>,
+  lastObjectiveType: string | null,
+): Record<BattleObjectiveType, number> {
+  const adjusted = cloneObjectiveWeights(weights);
+  if (!isObjectiveType(lastObjectiveType)) {
+    return adjusted;
+  }
+  if (!hasPositiveAlternativeWeight(adjusted, lastObjectiveType)) {
+    return adjusted;
+  }
+  adjusted[lastObjectiveType] = 0;
+  return adjusted;
+}
+
 function nodeWeightsForObjective(nodeType: NodeType): 'BATTLE' | 'ELITE' | 'BOSS' | null {
   if (nodeType === 'BATTLE' || nodeType === 'ELITE' || nodeType === 'BOSS') {
     return nodeType;
@@ -94,6 +153,34 @@ function weightedMapId(rng: SeededRng, entries: ReadonlyArray<{ id: string; weig
   return entries[entries.length - 1].id;
 }
 
+function applyMapStreakProtection(
+  entries: ReadonlyArray<{ id: string; weight: number }>,
+  lastMapId: string | null,
+): Array<{ id: string; weight: number }> {
+  if (lastMapId === null || entries.length < 2) {
+    return [...entries];
+  }
+
+  let hasAlternative = false;
+  for (let i = 0; i < entries.length; i += 1) {
+    if (entries[i].id !== lastMapId) {
+      hasAlternative = true;
+      break;
+    }
+  }
+  if (!hasAlternative) {
+    return [...entries];
+  }
+
+  const filtered: Array<{ id: string; weight: number }> = [];
+  for (let i = 0; i < entries.length; i += 1) {
+    if (entries[i].id !== lastMapId) {
+      filtered.push(entries[i]);
+    }
+  }
+  return filtered.length > 0 ? filtered : [...entries];
+}
+
 function sampleReward(
   rng: SeededRng,
   range: { min: number; max: number },
@@ -125,21 +212,22 @@ export function selectObjectiveType(nodeId: string, nodeType: NodeType, runState
   }
 
   const weights = objectives.selectionWeightsByNodeType[selectionKey];
+  const useStreakProtection = shouldApplyStreakProtection(nodeId, runState);
+  const lastObjectiveType = useStreakProtection ? runState.lastObjectiveType : null;
+  const adjustedWeights = useStreakProtection
+    ? applyObjectiveStreakProtection(weights, lastObjectiveType)
+    : cloneObjectiveWeights(weights);
   const rng = new SeededRng(objectiveSeed(nodeId, nodeType, runState));
   if (
     nodeType === 'ELITE' &&
     runState.step >= objectives.siege.eliteDepthMin &&
     rng.range(0, 1) <= objectives.siege.eliteChance
   ) {
-    return 'SIEGE';
+    if (lastObjectiveType !== 'SIEGE' || !hasPositiveAlternativeWeight(weights, 'SIEGE')) {
+      return 'SIEGE';
+    }
   }
-  return weightedObjective(rng, {
-    CAPTURE: weights.CAPTURE,
-    ASSASSINATE: weights.ASSASSINATE,
-    HOLDOUT: weights.HOLDOUT,
-    ESCORT: weights.ESCORT,
-    SIEGE: weights.SIEGE,
-  });
+  return weightedObjective(rng, adjustedWeights);
 }
 
 export function objectivePreviewLabel(nodeId: string, nodeType: NodeType, runState: RunState): string {
@@ -193,6 +281,7 @@ function resolveEnemySquads(
 }
 
 function resolveMapId(
+  nodeId: string,
   nodeType: NodeType,
   objectiveType: BattleObjectiveType,
   runState: RunState,
@@ -229,7 +318,10 @@ function resolveMapId(
   if (validEntries.length === 0) {
     return fallbackMapId;
   }
-  return weightedMapId(rng, validEntries, fallbackMapId);
+
+  const useStreakProtection = shouldApplyStreakProtection(nodeId, runState);
+  const mapEntries = useStreakProtection ? applyMapStreakProtection(validEntries, runState.lastMapId) : [...validEntries];
+  return weightedMapId(rng, mapEntries, fallbackMapId);
 }
 
 export function createScenario(
@@ -246,7 +338,7 @@ export function createScenario(
   const difficultyTier = Math.max(1, runState.difficultyTier);
   const objectiveType = selectObjectiveType(nodeId, nodeType, runState);
   const selectedObjectiveSeed = objectiveSeed(nodeId, nodeType, runState);
-  const mapId = resolveMapId(nodeType, objectiveType, runState, rng);
+  const mapId = resolveMapId(nodeId, nodeType, objectiveType, runState, rng);
   const enemySquads = resolveEnemySquads(
     nodeType,
     objectiveType,

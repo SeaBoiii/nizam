@@ -54,6 +54,8 @@ export class RewardsState implements IGameState {
 
   private choiceTaken = false;
   private perkChoicePending = false;
+  private allowBonusChoices = true;
+  private returnToTitleOnContinue = false;
 
   constructor(private readonly context: StateContext) {
     this.root.addChild(this.bg);
@@ -77,6 +79,12 @@ export class RewardsState implements IGameState {
     this.continueButton = new TextButton({
       label: 'Continue',
       onClick: () => {
+        if (this.returnToTitleOnContinue) {
+          this.context.clearSaveData();
+          this.context.setCampaignData(null);
+          this.context.transitionTo('TITLE');
+          return;
+        }
         this.context.transitionTo('OVERWORLD');
       },
       width: 220,
@@ -106,55 +114,106 @@ export class RewardsState implements IGameState {
 
     this.choiceTaken = false;
     this.perkChoicePending = false;
+    this.allowBonusChoices = true;
+    this.returnToTitleOnContinue = false;
     this.perkChoice.hide();
+
+    const victory = resolvedResult.victory;
+    const bossLoss = !victory && resolvedResult.scenario.nodeType === 'BOSS';
+    this.allowBonusChoices = victory;
+    this.returnToTitleOnContinue = bossLoss;
+    this.continueButton.setLabel(bossLoss ? 'Back To Title' : 'Continue');
 
     const alreadyRewarded = campaign.runState.lastRewardedNodeId === resolvedResult.scenario.nodeId;
     const scaling = getScaling(campaign.runState.step, campaign.runState.difficultyMode);
     const perkMods = getCombinedPerkMods(campaign.perkState.pickedPerkIds);
+    const lossProtection = contentManager.getNodeTuning().lossProtection;
 
     let goldGain = 0;
     let recruitsGain = 0;
+    let suppliesGain = 0;
     let fieldMedicBonus = 0;
+    let consolationMultiplier = 1;
 
     if (!alreadyRewarded) {
       campaign.runState.battleNodesCleared += 1;
       campaign.runState.lastRewardedNodeId = resolvedResult.scenario.nodeId;
-
-      const victory = resolvedResult.victory;
       const scaledGold = Math.round(resolvedResult.scenario.goldReward * scaling.rewardGoldMult);
       const scaledRecruits = Math.round(resolvedResult.scenario.recruitsReward * (0.95 + (scaling.rewardGoldMult - 1) * 0.8));
 
-      goldGain = victory ? scaledGold : Math.round(scaledGold * 0.45);
-      recruitsGain = victory ? scaledRecruits : Math.max(3, Math.round(scaledRecruits * 0.5));
       fieldMedicBonus = Math.max(
         0,
         Math.round(resolvedResult.playerCasualties * perkMods.fieldMedicRecruitsPerCasualty),
       );
 
+      if (victory) {
+        campaign.runState.consecutiveLosses = 0;
+        goldGain = scaledGold;
+        recruitsGain = scaledRecruits;
+      } else {
+        campaign.runState.consecutiveLosses += 1;
+        if (!bossLoss && lossProtection.enabled) {
+          const cappedLosses = Math.min(
+            campaign.runState.consecutiveLosses,
+            Math.max(0, Math.floor(lossProtection.maxConsecutiveLossBoost)),
+          );
+          consolationMultiplier = 1 + 0.2 * cappedLosses;
+          goldGain = Math.floor(
+            scaledGold * Math.max(0, lossProtection.goldPctOfNormalReward) * consolationMultiplier,
+          );
+          recruitsGain = Math.floor(
+            scaledRecruits * Math.max(0, lossProtection.recruitsPctOfNormalReward) * consolationMultiplier,
+          );
+          suppliesGain = Math.max(0, Math.floor(lossProtection.suppliesFlat));
+        }
+      }
+
       campaign.armyState.gold += goldGain;
+      campaign.armyState.supplies += suppliesGain;
       campaign.armyState.recruits += recruitsGain + fieldMedicBonus;
     }
 
-    const victory = resolvedResult.victory;
     if (resolvedResult.scenario.nodeType === 'BOSS') {
       this.context.markRunCompleted(victory ? 'WIN' : 'LOSS');
     }
 
-    this.title.text = victory ? 'Victory Rewards' : 'Defeat Spoils';
-    this.summary.text = [
-      `Outcome: ${victory ? 'Victory' : 'Defeat'}`,
+    this.title.text = victory
+      ? 'Victory Rewards'
+      : bossLoss
+        ? 'Defeat — Run Ends'
+        : 'Defeat — You regroup and recover';
+
+    const summaryLines = [
+      `Outcome: ${victory ? 'Victory' : bossLoss ? 'Defeat (Boss)' : 'Defeat'}`,
       `Objective: ${objectiveDisplayName(resolvedResult.scenario.objectiveType)}`,
       `Player casualties: ${resolvedResult.playerCasualties}`,
       `Enemy casualties: ${resolvedResult.enemyCasualties}`,
       `Mode: ${campaign.runState.difficultyMode}`,
-    ].join('\n');
-    this.rewardInfo.text = alreadyRewarded
-      ? 'Rewards already claimed for this node.\nChoose one bonus:'
-      : `Gold +${goldGain}    Recruits +${recruitsGain}${
-          fieldMedicBonus > 0 ? ` (+${fieldMedicBonus} Field Medic)` : ''
-        }\nChoose one bonus:`;
+    ];
+    if (!victory && !bossLoss && lossProtection.enabled) {
+      summaryLines.push(`Consolation bonus x${consolationMultiplier.toFixed(1)}`);
+    }
+    this.summary.text = summaryLines.join('\n');
 
-    if (!alreadyRewarded) {
+    if (alreadyRewarded) {
+      this.rewardInfo.text = this.allowBonusChoices
+        ? 'Rewards already claimed for this node.\nChoose one bonus:'
+        : bossLoss
+          ? 'Boss defeat recorded. Run ended.\nReturn to Title.'
+          : 'Rewards already claimed for this node.';
+    } else if (victory) {
+      this.rewardInfo.text = `Gold +${goldGain}    Recruits +${recruitsGain}${
+        fieldMedicBonus > 0 ? ` (+${fieldMedicBonus} Field Medic)` : ''
+      }\nChoose one bonus:`;
+    } else if (bossLoss) {
+      this.rewardInfo.text = 'The boss battle was lost. This run has ended.\nNo consolation rewards granted.';
+    } else {
+      this.rewardInfo.text = `Consolation: Gold +${goldGain}    Recruits +${recruitsGain}    Supplies +${suppliesGain}${
+        fieldMedicBonus > 0 ? `\nField Medic recovered +${fieldMedicBonus} recruits.` : ''
+      }\nConsolation Bonus x${consolationMultiplier.toFixed(1)}`;
+    }
+
+    if (!alreadyRewarded && victory) {
       this.maybeOfferPerk(campaign);
     }
 
@@ -190,7 +249,7 @@ export class RewardsState implements IGameState {
   }
 
   private applyUpgradeChoice(): void {
-    if (this.choiceTaken || this.perkChoicePending) {
+    if (!this.allowBonusChoices || this.choiceTaken || this.perkChoicePending) {
       return;
     }
 
@@ -232,7 +291,7 @@ export class RewardsState implements IGameState {
   }
 
   private applyRecruitChoice(): void {
-    if (this.choiceTaken || this.perkChoicePending) {
+    if (!this.allowBonusChoices || this.choiceTaken || this.perkChoicePending) {
       return;
     }
 
@@ -285,10 +344,10 @@ export class RewardsState implements IGameState {
       this.upgradeButton.setLabel('Upgrade Squad');
     }
 
-    const canUseChoices = !this.perkChoicePending;
+    const canUseChoices = !this.perkChoicePending && this.allowBonusChoices;
     this.upgradeButton.setEnabled(canUseChoices && !this.choiceTaken && hasUpgradeable);
     this.recruitButton.setEnabled(canUseChoices && !this.choiceTaken);
-    this.continueButton.setEnabled(canUseChoices && (this.choiceTaken || !hasUpgradeable));
+    this.continueButton.setEnabled(canUseChoices ? this.choiceTaken || !hasUpgradeable : !this.perkChoicePending);
   }
 
   private layout(): void {

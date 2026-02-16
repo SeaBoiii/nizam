@@ -240,8 +240,6 @@ export class OverworldState implements IGameState {
 
     const runState = campaign.runState;
     const armyState = campaign.armyState;
-
-    runState.currentNodeId = node.id;
     if (!node.cleared) {
       node.cleared = true;
       runState.step += 1;
@@ -259,6 +257,9 @@ export class OverworldState implements IGameState {
 
     if (isBattleNode(node.type)) {
       const scenario = createScenario(node.id, node.type, runState, armyState);
+      runState.currentNodeId = node.id;
+      runState.lastObjectiveType = scenario.objectiveType;
+      runState.lastMapId = scenario.mapId;
       if (runState.restBonusBattles > 0) {
         runState.restBonusBattles = Math.max(0, runState.restBonusBattles - 1);
       }
@@ -266,6 +267,8 @@ export class OverworldState implements IGameState {
       this.context.transitionTo('BATTLE', { scenario });
       return;
     }
+
+    runState.currentNodeId = node.id;
 
     switch (node.type) {
       case 'SHOP':

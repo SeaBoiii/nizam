@@ -561,6 +561,13 @@ export const DEFAULT_NODES_CONTENT: NodesTuningContent = {
     suppliesGain: 12,
     restBonusBattles: 1,
   },
+  lossProtection: {
+    enabled: true,
+    goldPctOfNormalReward: 0.6,
+    recruitsPctOfNormalReward: 0.8,
+    suppliesFlat: 10,
+    maxConsecutiveLossBoost: 2,
+  },
 };
 
 export const DEFAULT_MAPS_CONTENT: MapsContent = {

@@ -233,6 +233,9 @@ export class Game {
       restBonusBattles: 0,
       battleNodesCleared: 0,
       lastRewardedNodeId: '',
+      consecutiveLosses: 0,
+      lastObjectiveType: null,
+      lastMapId: null,
     };
 
     for (let i = 0; i < mapState.nodes.length; i += 1) {

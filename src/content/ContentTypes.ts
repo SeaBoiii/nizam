@@ -192,6 +192,14 @@ export interface RestNodeTuningContent {
   restBonusBattles: number;
 }
 
+export interface LossProtectionTuningContent {
+  enabled: boolean;
+  goldPctOfNormalReward: number;
+  recruitsPctOfNormalReward: number;
+  suppliesFlat: number;
+  maxConsecutiveLossBoost: number;
+}
+
 export interface NodesMapGenerationTuningContent {
   minNodes: number;
   maxNodes: number;
@@ -212,6 +220,7 @@ export interface NodesTuningContent {
   shop: ShopNodeTuningContent;
   recruit: RecruitNodeTuningContent;
   rest: RestNodeTuningContent;
+  lossProtection: LossProtectionTuningContent;
 }
 
 export interface ScenarioSquadTemplateContent {

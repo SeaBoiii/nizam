@@ -226,6 +226,7 @@ function cloneNodesContent(content: NodesTuningContent): NodesTuningContent {
     shop: { ...content.shop },
     recruit: { ...content.recruit },
     rest: { ...content.rest },
+    lossProtection: { ...content.lossProtection },
   };
 }
 
@@ -693,6 +694,18 @@ function isValidNodesContent(value: unknown): value is NodesTuningContent {
   }
 
   if (!asObject(candidate.shop) || !asObject(candidate.recruit) || !asObject(candidate.rest)) {
+    return false;
+  }
+
+  const lossProtection = asObject(candidate.lossProtection);
+  if (
+    !lossProtection ||
+    typeof lossProtection.enabled !== 'boolean' ||
+    !isFiniteNumber(lossProtection.goldPctOfNormalReward) ||
+    !isFiniteNumber(lossProtection.recruitsPctOfNormalReward) ||
+    !isFiniteNumber(lossProtection.suppliesFlat) ||
+    !isFiniteNumber(lossProtection.maxConsecutiveLossBoost)
+  ) {
     return false;
   }
   return true;

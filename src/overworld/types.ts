@@ -27,4 +27,7 @@ export interface RunState {
   restBonusBattles: number;
   battleNodesCleared: number;
   lastRewardedNodeId: string;
+  consecutiveLosses: number;
+  lastObjectiveType: string | null;
+  lastMapId: string | null;
 }

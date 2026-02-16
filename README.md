@@ -115,6 +115,19 @@ If a content file is missing or invalid, the game falls back to built-in default
 - Save data is persisted in localStorage (`nizam_save_v1`) and used by **Continue**.
 - Saves now include `saveVersion` and `contentVersion`, and older v1 saves are migrated automatically.
 
+## Anti-frustration rules (Sprint 12.3)
+
+- Losing a non-boss battle now grants consolation rewards and the run continues:
+  - gold/recruits are scaled from normal node rewards using `lossProtection` tuning in `public/content/nodes.json`
+  - supplies gain uses a flat value from the same tuning block
+  - consecutive losses apply a capped multiplier boost to consolation gold/recruits
+- Boss defeat ends the run and returns to title from rewards.
+- Perk draft is skipped on defeat (victory only).
+- Objective streak protection:
+  - battle objective type avoids repeating back-to-back when alternatives exist
+  - map id also avoids repeating back-to-back when 2+ candidates exist
+  - both rules are deterministic from run seed + run state (no `Math.random`)
+
 ## Controls
 
 - Title: click `New Run`, `Continue`, `Reset Save`, `Stats`

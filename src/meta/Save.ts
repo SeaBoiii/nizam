@@ -46,6 +46,13 @@ function asString(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value : fallback;
 }
 
+function asNullableString(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  return value.length > 0 ? value : null;
+}
+
 function asStringArray(value: unknown, fallback: string[]): string[] {
   if (!Array.isArray(value)) {
     return fallback;
@@ -80,6 +87,9 @@ function sanitizeRunState(value: unknown): RunState | null {
     restBonusBattles: Math.max(0, Math.floor(asNumber(value.restBonusBattles, 0))),
     battleNodesCleared: Math.max(0, Math.floor(asNumber(value.battleNodesCleared, 0))),
     lastRewardedNodeId: asString(value.lastRewardedNodeId, ''),
+    consecutiveLosses: Math.max(0, Math.floor(asNumber(value.consecutiveLosses, 0))),
+    lastObjectiveType: asNullableString(value.lastObjectiveType),
+    lastMapId: asNullableString(value.lastMapId),
   };
 }
 
@@ -236,6 +246,9 @@ function migrateRunState(runState: RunState, mapState: MapState): RunState {
     difficultyMode: runState.difficultyMode ?? DifficultyMode.NORMAL,
     battleNodesCleared,
     lastRewardedNodeId: runState.lastRewardedNodeId ?? '',
+    consecutiveLosses: Math.max(0, Math.floor(runState.consecutiveLosses ?? 0)),
+    lastObjectiveType: runState.lastObjectiveType ?? null,
+    lastMapId: runState.lastMapId ?? null,
   };
 }
 
@@ -349,4 +362,3 @@ export function clearSave(): void {
 export function hasSave(): boolean {
   return loadGame() !== null;
 }
-

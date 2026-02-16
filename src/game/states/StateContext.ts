@@ -20,7 +20,7 @@ export interface StateContext {
   app: Application;
   stage: Container;
   getCampaignData(): CampaignData | null;
-  setCampaignData(data: CampaignData): void;
+  setCampaignData(data: CampaignData | null): void;
   startNewRun(mode?: DifficultyMode): void;
   hasSaveData(): boolean;
   loadSaveData(): boolean;
