@@ -25,7 +25,9 @@ import { setTextButtonClickListener } from '../ui/widgets/TextButton';
 import { ErrorBoundary, type CapturedErrorInfo } from './ErrorBoundary';
 import type { IGameState } from './states/IGameState';
 import { BattleState } from './states/BattleState';
+import { CompareState } from './states/CompareState';
 import { DailyHistoryState } from './states/DailyHistoryState';
+import { LeaderboardState } from './states/LeaderboardState';
 import { OverworldState } from './states/OverworldState';
 import { RunEndState } from './states/RunEndState';
 import { RewardsState } from './states/RewardsState';
@@ -183,7 +185,9 @@ export class Game {
         !this.paused &&
         this.currentStateId !== 'TITLE' &&
         this.currentStateId !== 'STATS' &&
-        this.currentStateId !== 'DAILY_HISTORY',
+        this.currentStateId !== 'DAILY_HISTORY' &&
+        this.currentStateId !== 'COMPARE' &&
+        this.currentStateId !== 'LEADERBOARD',
     );
     this.updateDebugPanel();
     this.pauseMenu.layout(this.app.screen.width, this.app.screen.height);
@@ -235,6 +239,12 @@ export class Game {
         break;
       case 'DAILY_HISTORY':
         this.currentState = new DailyHistoryState(this.stateContext);
+        break;
+      case 'COMPARE':
+        this.currentState = new CompareState(this.stateContext);
+        break;
+      case 'LEADERBOARD':
+        this.currentState = new LeaderboardState(this.stateContext);
         break;
     }
 

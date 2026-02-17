@@ -107,6 +107,8 @@ export class TitleState implements IGameState {
   private readonly clearButton: TextButton;
   private readonly statsButton: TextButton;
   private readonly dailyHistoryButton: TextButton;
+  private readonly compareButton: TextButton;
+  private readonly leaderboardButton: TextButton;
   private readonly normalButton: TextButton;
   private readonly hardButton: TextButton;
   private readonly packPrevButton: TextButton;
@@ -258,6 +260,20 @@ export class TitleState implements IGameState {
         this.context.transitionTo('DAILY_HISTORY');
       },
     });
+    this.compareButton = new TextButton({
+      label: 'Compare Results',
+      width: 170,
+      onClick: () => {
+        this.context.transitionTo('COMPARE', { returnState: 'TITLE' });
+      },
+    });
+    this.leaderboardButton = new TextButton({
+      label: 'Leaderboards',
+      width: 170,
+      onClick: () => {
+        this.context.transitionTo('LEADERBOARD');
+      },
+    });
 
     this.normalButton = new TextButton({
       label: 'Normal',
@@ -329,6 +345,8 @@ export class TitleState implements IGameState {
     this.root.addChild(this.clearButton);
     this.root.addChild(this.statsButton);
     this.root.addChild(this.dailyHistoryButton);
+    this.root.addChild(this.compareButton);
+    this.root.addChild(this.leaderboardButton);
     this.root.addChild(this.normalButton);
     this.root.addChild(this.hardButton);
     this.root.addChild(this.packPrevButton);
@@ -394,6 +412,8 @@ export class TitleState implements IGameState {
     this.playChallengeButton.setEnabled(!locked);
     this.dailyHistoryButton.setEnabled(!locked);
     this.statsButton.setEnabled(!locked);
+    this.compareButton.setEnabled(!locked);
+    this.leaderboardButton.setEnabled(!locked);
     this.continueDailyButton.setEnabled(false);
   }
 
@@ -424,8 +444,10 @@ export class TitleState implements IGameState {
     this.continueChallengeButton.position.set(width * 0.5 - 110, height * 0.84);
     this.continueButton.position.set(width * 0.5 - 110, height * 0.895);
     this.clearButton.position.set(width * 0.5 - 110, height * 0.945);
-    this.statsButton.position.set(width * 0.5 - 180, height * 0.995);
-    this.dailyHistoryButton.position.set(width * 0.5 + 10, height * 0.995);
+    this.statsButton.position.set(width * 0.5 - 370, height * 0.995);
+    this.dailyHistoryButton.position.set(width * 0.5 - 190, height * 0.995);
+    this.compareButton.position.set(width * 0.5 - 10, height * 0.995);
+    this.leaderboardButton.position.set(width * 0.5 + 170, height * 0.995);
 
     this.difficultyText.position.set(width * 0.5 - 130, height * 0.93);
     this.normalButton.position.set(width * 0.5 - 134, height * 0.96);

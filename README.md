@@ -309,6 +309,31 @@ After content reload, restart battle/run to apply changes to newly spawned units
   - Normal and Daily saves are not overwritten.
 - No leaderboard/backend: sharing is local-only + manual copy/paste.
 
+## Result Codes + Compare + Local Leaderboards (Sprint 18.1)
+
+- Result Codes are compact base64url payloads for completed run outcomes.
+- On Run Summary:
+  - `Copy Result Code` copies your run result code.
+  - `Compare Result Code` opens side-by-side compare with your result preloaded.
+- On Title:
+  - `Compare Results` opens compare screen directly for pasted codes.
+  - `Leaderboards` opens local leaderboard viewer.
+- Compare screen checks compatibility with clear banners:
+  - seed mismatch
+  - difficulty mismatch
+  - pack/version mismatch
+  - daily date mismatch (for daily-vs-daily)
+  - same identity when seed + difficulty + pack/version match
+- Signature integrity is lightweight:
+  - invalid signature codes are still viewable as **Unverified**.
+- Compatible daily/challenge results can be saved to local leaderboard buckets.
+- Local leaderboard storage is local-only in:
+  - `nizam_leaderboards_v1`
+- Bucket key format:
+  - Daily: `daily|YYYY-MM-DD|packId|packVersion|difficulty`
+  - Challenge: `challenge|seed|packId|packVersion|difficulty`
+  - Normal runs are intentionally not bucketed.
+
 ## Daily Share Card + Local History (Sprint 16.1)
 
 - Completing a Daily run records a local result entry and updates best score for that SG date.
