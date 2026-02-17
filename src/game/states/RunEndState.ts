@@ -1,7 +1,14 @@
 import { Container, Graphics, Text } from 'pixi.js';
 import { contentManager } from '../../content/ContentManager';
+import { getBestForDate, recordDailyResult } from '../../meta/DailyResults';
 import { DifficultyMode } from '../../meta/Difficulty';
-import type { RunState } from '../../overworld/types';
+import {
+  buildShareResultText,
+  createShareCardContainer,
+  type ShareCardData,
+} from '../../ui/share/ShareCard';
+import { exportShareCardPNG } from '../../ui/share/ShareCardExporter';
+import { downloadBlob, downloadDataUrl } from '../../ui/share/download';
 import { TextButton } from '../../ui/widgets/TextButton';
 import { copyTextWithFallback } from '../../utils/clipboard';
 import type { IGameState } from './IGameState';
@@ -56,10 +63,12 @@ export class RunEndState implements IGameState {
   });
 
   private readonly copyButton: TextButton;
+  private readonly downloadCardButton: TextButton;
   private readonly newDailyButton: TextButton;
   private readonly backButton: TextButton;
 
   private shareText = '';
+  private shareCardData: ShareCardData | null = null;
   private isDailyRun = false;
   private ended = false;
 
@@ -71,9 +80,14 @@ export class RunEndState implements IGameState {
     this.status.anchor.set(0.5, 0.5);
 
     this.copyButton = new TextButton({
-      label: 'Copy Result',
+      label: 'Copy Result Text',
       width: 220,
       onClick: () => this.copyResult(),
+    });
+    this.downloadCardButton = new TextButton({
+      label: 'Download Share Card (PNG)',
+      width: 260,
+      onClick: () => this.downloadCard(),
     });
     this.newDailyButton = new TextButton({
       label: 'New Daily Run',
@@ -90,6 +104,7 @@ export class RunEndState implements IGameState {
     this.root.addChild(this.body);
     this.root.addChild(this.status);
     this.root.addChild(this.copyButton);
+    this.root.addChild(this.downloadCardButton);
     this.root.addChild(this.newDailyButton);
     this.root.addChild(this.backButton);
   }
@@ -106,6 +121,7 @@ export class RunEndState implements IGameState {
     this.status.text = '';
     this.isDailyRun = campaign.runState.mode === 'DAILY';
     this.newDailyButton.visible = this.isDailyRun;
+    this.downloadCardButton.visible = this.isDailyRun;
 
     const stats = this.context.getStatsSnapshot();
     const contentStatus = this.context.getContentStatus();
@@ -134,10 +150,50 @@ export class RunEndState implements IGameState {
       perkNames.push(perk ? perk.name : perkId);
     }
     const perkList = perkNames.length > 0 ? perkNames.join(', ') : 'None';
-    const difficultyLabel = runState.difficultyMode === DifficultyMode.HARD ? 'Hard' : 'Normal';
+    const difficultyLabel = runState.difficultyMode === DifficultyMode.HARD ? 'HARD' : 'NORMAL';
     const dateLine = runState.mode === 'DAILY' && runState.dateKey !== null ? `Date: ${runState.dateKey} (SG)` : 'Date: -';
 
-    this.body.text = [
+    this.shareCardData = {
+      mode: runState.mode,
+      dateKey: runState.dateKey,
+      score: finalScore,
+      difficulty: runState.difficultyMode,
+      nodesCleared: runState.clearedNodeIds.length,
+      wins: battlesWon,
+      timeSec: totalDuration,
+      casualtiesPct: avgCasualties,
+      perks: perkNames,
+      seed: runState.seed,
+      packName: contentStatus.loadedPackName,
+      packVersion: contentStatus.contentVersion,
+      urlPath: import.meta.env.BASE_URL,
+    };
+
+    this.shareText = buildShareResultText(this.shareCardData);
+
+    let dailyBestLine = '';
+    if (this.isDailyRun && runState.dateKey !== null) {
+      recordDailyResult({
+        dateKey: runState.dateKey,
+        score: finalScore,
+        difficulty: runState.difficultyMode,
+        nodesCleared: runState.clearedNodeIds.length,
+        wins: battlesWon,
+        timeSec: totalDuration,
+        casualtiesPct: avgCasualties,
+        perks: perkNames,
+        seed: runState.seed,
+        packName: contentStatus.loadedPackName,
+        packVersion: contentStatus.contentVersion,
+        ts: Date.now(),
+      });
+      const best = getBestForDate(runState.dateKey);
+      if (best !== null) {
+        dailyBestLine = `Daily Best: ${best.score} (${best.difficulty})`;
+      }
+    }
+
+    const bodyLines = [
       `Mode: ${modeLabel(runState.mode)}`,
       dateLine,
       `Seed: ${runState.seed}`,
@@ -152,20 +208,11 @@ export class RunEndState implements IGameState {
       `Battle Time: ${formatDurationShort(totalDuration)}`,
       `Avg Casualties: ${formatPercent(avgCasualties)}`,
       `Perks: ${perkList}`,
-    ].join('\n');
-
-    this.shareText = this.buildShareText({
-      runState,
-      finalScore,
-      difficultyLabel,
-      nodesCleared: runState.clearedNodeIds.length,
-      battlesWon,
-      totalDurationSec: totalDuration,
-      avgCasualties,
-      perkList,
-      contentVersion: contentStatus.contentVersion,
-      packName: contentStatus.loadedPackName,
-    });
+    ];
+    if (dailyBestLine.length > 0) {
+      bodyLines.push(dailyBestLine);
+    }
+    this.body.text = bodyLines.join('\n');
 
     this.context.recordDiagnosticEvent('RUN_END_VIEWED', {
       mode: runState.mode,
@@ -187,35 +234,36 @@ export class RunEndState implements IGameState {
     this.layout();
   }
 
-  private buildShareText(input: {
-    runState: RunState;
-    finalScore: number;
-    difficultyLabel: string;
-    nodesCleared: number;
-    battlesWon: number;
-    totalDurationSec: number;
-    avgCasualties: number;
-    perkList: string;
-    contentVersion: string;
-    packName: string;
-  }): string {
-    const header =
-      input.runState.mode === 'DAILY' && input.runState.dateKey !== null
-        ? `NIZAM Daily Challenge - ${input.runState.dateKey} (SG)`
-        : 'NIZAM Run Result';
-
-    return [
-      header,
-      `Score: ${input.finalScore} (${input.difficultyLabel})`,
-      `Nodes: ${input.nodesCleared} | Wins: ${input.battlesWon} | Casualties: ${formatPercent(input.avgCasualties)} | Time: ${formatDurationShort(input.totalDurationSec)}`,
-      `Perks: ${input.perkList}`,
-      `Seed: ${input.runState.seed} | Pack: ${input.packName} v${input.contentVersion}`,
-    ].join('\n');
-  }
-
   private async copyResult(): Promise<void> {
     const ok = await copyTextWithFallback(this.shareText);
     this.status.text = ok ? 'Copied result text.' : 'Copy failed.';
+  }
+
+  private async downloadCard(): Promise<void> {
+    const data = this.shareCardData;
+    if (data === null || data.mode !== 'DAILY' || data.dateKey === null) {
+      this.status.text = 'Share card is available for daily runs only.';
+      return;
+    }
+
+    const card = createShareCardContainer(data);
+    const fileName = `nizam_daily_${data.dateKey}_${Math.max(0, Math.floor(data.score))}.png`;
+    try {
+      const blob = await exportShareCardPNG(this.context.app.renderer, card);
+      let ok = downloadBlob(blob, fileName);
+      if (!ok) {
+        const fallbackDataUrl = await this.context.app.renderer.extract.base64({
+          target: card,
+          format: 'png',
+        });
+        ok = downloadDataUrl(fallbackDataUrl, fileName);
+      }
+      this.status.text = ok ? `Downloaded ${fileName}.` : 'Download failed.';
+    } catch (error) {
+      this.status.text = `Download failed: ${String(error)}`;
+    } finally {
+      card.destroy({ children: true });
+    }
   }
 
   private async startNewDaily(): Promise<void> {
@@ -265,8 +313,14 @@ export class RunEndState implements IGameState {
     this.status.position.set(width * 0.5, panelY + panelHeight - 84);
 
     const buttonY = panelY + panelHeight - 56;
-    this.copyButton.position.set(width * 0.5 - 340, buttonY);
-    this.newDailyButton.position.set(width * 0.5 - 110, buttonY);
-    this.backButton.position.set(width * 0.5 + 120, buttonY);
+    if (this.isDailyRun) {
+      this.copyButton.position.set(width * 0.5 - 450, buttonY);
+      this.downloadCardButton.position.set(width * 0.5 - 220, buttonY);
+      this.newDailyButton.position.set(width * 0.5 + 50, buttonY);
+      this.backButton.position.set(width * 0.5 + 280, buttonY);
+    } else {
+      this.copyButton.position.set(width * 0.5 - 230, buttonY);
+      this.backButton.position.set(width * 0.5 + 10, buttonY);
+    }
   }
 }

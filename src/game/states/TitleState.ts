@@ -1,6 +1,7 @@
 import { Container, Graphics, Text } from 'pixi.js';
 import type { ContentLoadStatus, ContentPackManifestEntry } from '../../content/ContentTypes';
 import { getDailySeed } from '../../meta/DailyChallenge';
+import { getBestForDate } from '../../meta/DailyResults';
 import { DifficultyMode } from '../../meta/Difficulty';
 import { TextButton } from '../../ui/widgets/TextButton';
 import type { IGameState } from './IGameState';
@@ -96,6 +97,7 @@ export class TitleState implements IGameState {
   private readonly continueButton: TextButton;
   private readonly clearButton: TextButton;
   private readonly statsButton: TextButton;
+  private readonly dailyHistoryButton: TextButton;
   private readonly normalButton: TextButton;
   private readonly hardButton: TextButton;
   private readonly packPrevButton: TextButton;
@@ -176,8 +178,16 @@ export class TitleState implements IGameState {
 
     this.statsButton = new TextButton({
       label: 'Stats',
+      width: 170,
       onClick: () => {
         this.context.transitionTo('STATS', { returnState: 'TITLE' });
+      },
+    });
+    this.dailyHistoryButton = new TextButton({
+      label: 'Daily History',
+      width: 170,
+      onClick: () => {
+        this.context.transitionTo('DAILY_HISTORY');
       },
     });
 
@@ -226,6 +236,7 @@ export class TitleState implements IGameState {
     this.root.addChild(this.continueButton);
     this.root.addChild(this.clearButton);
     this.root.addChild(this.statsButton);
+    this.root.addChild(this.dailyHistoryButton);
     this.root.addChild(this.normalButton);
     this.root.addChild(this.hardButton);
     this.root.addChild(this.packPrevButton);
@@ -271,6 +282,8 @@ export class TitleState implements IGameState {
     this.continueButton.setEnabled(this.context.hasSaveData() && !locked);
     this.newRunButton.setEnabled(!locked);
     this.dailyRunButton.setEnabled(!locked);
+    this.dailyHistoryButton.setEnabled(!locked);
+    this.statsButton.setEnabled(!locked);
     this.continueDailyButton.setEnabled(false);
   }
 
@@ -299,7 +312,8 @@ export class TitleState implements IGameState {
     this.continueDailyButton.position.set(width * 0.5 - 110, height * 0.69);
     this.continueButton.position.set(width * 0.5 - 110, height * 0.765);
     this.clearButton.position.set(width * 0.5 - 110, height * 0.84);
-    this.statsButton.position.set(width * 0.5 - 110, height * 0.915);
+    this.statsButton.position.set(width * 0.5 - 180, height * 0.915);
+    this.dailyHistoryButton.position.set(width * 0.5 + 10, height * 0.915);
 
     this.difficultyText.position.set(width * 0.5 - 130, height * 0.94);
     this.normalButton.position.set(width * 0.5 - 134, height * 0.965);
@@ -357,8 +371,7 @@ export class TitleState implements IGameState {
     const today = getDailySeed();
     const selectedPack = this.getSelectedPack();
     const dailySave = this.context.getDailySaveInfo();
-    const stats = this.context.getStatsSnapshot();
-    const bestToday = stats.dailyBestScoreByDateKey[today.dateKey] ?? 0;
+    const bestToday = getBestForDate(today.dateKey);
     const locked = this.loadingPack || this.loadingDaily;
 
     if (locked) {
@@ -370,7 +383,7 @@ export class TitleState implements IGameState {
 
     const lines: string[] = [];
     lines.push(`Daily Seed (${today.dateKey} SG): ${today.seed}`);
-    lines.push(`Best Local Daily: ${bestToday > 0 ? bestToday : '-'}`);
+    lines.push(`Best Local Daily: ${bestToday ? bestToday.score : '-'}`);
     if (selectedPack.id !== 'base') {
       lines.push('Daily Challenge uses Base pack for fairness.');
     }

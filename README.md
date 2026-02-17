@@ -142,6 +142,7 @@ If a selected pack is missing/invalid, the loader falls back to `base`. If `base
 - Title: choose `Content Pack` with `<` / `>` before starting or continuing
 - Title: `Daily Challenge` starts a seeded daily run (Asia/Singapore date)
 - Title: `Continue Daily` resumes only today's daily save (if available)
+- Title: `Daily History` opens local daily result history (copy/download old results)
 - Title: pick `Normal` or `Hard` before `New Run`
 - Overworld: left click connected nodes to advance, click `Back To Title` to return
 - Battle camera pan: `WASD` or Arrow keys
@@ -278,8 +279,25 @@ After content reload, restart battle/run to apply changes to newly spawned units
   - score + transparent breakdown
   - seed/date/mode/difficulty
   - perks picked
-  - `Copy Result` for sharing text in chats/issues
+  - `Copy Result Text` for sharing text in chats/issues
+- Daily run summaries also provide `Download Share Card (PNG)` generated fully client-side from Pixi.
 - Share strings include content pack/version so comparisons are meaningful.
+
+## Daily Share Card + Local History (Sprint 16.1)
+
+- Completing a Daily run records a local result entry and updates best score for that SG date.
+- Result history is local only in localStorage key:
+  - `nizam_daily_results_v1`
+- History keeps recent entries (capped) and stores best-by-date snapshots for quick comparison.
+- From `Run Summary` (daily):
+  - `Copy Result Text`
+  - `Download Share Card (PNG)`
+- From `Title -> Daily History`:
+  - browse recent daily entries
+  - copy share text again
+  - re-download a share card PNG for any stored entry
+  - reset daily history (with confirmation)
+- Privacy note: no network calls, no backend, no leaderboard upload; all share/export data is generated locally in-browser.
 
 ## Mod packs (Sprint 14)
 

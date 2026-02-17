@@ -24,6 +24,7 @@ import { setTextButtonClickListener } from '../ui/widgets/TextButton';
 import { ErrorBoundary, type CapturedErrorInfo } from './ErrorBoundary';
 import type { IGameState } from './states/IGameState';
 import { BattleState } from './states/BattleState';
+import { DailyHistoryState } from './states/DailyHistoryState';
 import { OverworldState } from './states/OverworldState';
 import { RunEndState } from './states/RunEndState';
 import { RewardsState } from './states/RewardsState';
@@ -176,7 +177,8 @@ export class Game {
       this.campaignData !== null &&
         !this.paused &&
         this.currentStateId !== 'TITLE' &&
-        this.currentStateId !== 'STATS',
+        this.currentStateId !== 'STATS' &&
+        this.currentStateId !== 'DAILY_HISTORY',
     );
     this.updateDebugPanel();
     this.pauseMenu.layout(this.app.screen.width, this.app.screen.height);
@@ -225,6 +227,9 @@ export class Game {
         break;
       case 'STATS':
         this.currentState = new StatsState(this.stateContext);
+        break;
+      case 'DAILY_HISTORY':
+        this.currentState = new DailyHistoryState(this.stateContext);
         break;
     }
 

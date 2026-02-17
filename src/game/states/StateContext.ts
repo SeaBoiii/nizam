@@ -10,7 +10,7 @@ import type { ContentLoadStatus, ContentPackManifestEntry } from '../../content/
 import type { GameEvents } from '../../sim/events/GameEvents';
 import type { SaveSlot } from '../../meta/Save';
 
-export type GameStateId = 'TITLE' | 'OVERWORLD' | 'BATTLE' | 'REWARDS' | 'RUN_END' | 'STATS';
+export type GameStateId = 'TITLE' | 'OVERWORLD' | 'BATTLE' | 'REWARDS' | 'RUN_END' | 'STATS' | 'DAILY_HISTORY';
 
 export interface DailySaveInfo {
   dateKey: string | null;
