@@ -1,5 +1,6 @@
 import { Container, Graphics, Text } from 'pixi.js';
 import { contentManager } from '../../content/ContentManager';
+import { encodeChallenge, type ChallengePayloadV1 } from '../../meta/ChallengeCode';
 import { getBestForDate, recordDailyResult } from '../../meta/DailyResults';
 import { DifficultyMode } from '../../meta/Difficulty';
 import {
@@ -26,7 +27,13 @@ function formatPercent(value01: number): string {
 }
 
 function modeLabel(mode: string): string {
-  return mode === 'DAILY' ? 'Daily' : 'Normal';
+  if (mode === 'DAILY') {
+    return 'Daily';
+  }
+  if (mode === 'CHALLENGE') {
+    return 'Challenge';
+  }
+  return 'Normal';
 }
 
 export class RunEndState implements IGameState {
@@ -63,11 +70,46 @@ export class RunEndState implements IGameState {
   });
 
   private readonly copyButton: TextButton;
+  private readonly createChallengeButton: TextButton;
   private readonly downloadCardButton: TextButton;
   private readonly newDailyButton: TextButton;
   private readonly backButton: TextButton;
+  private readonly challengeModal = new Container();
+  private readonly challengeModalBackdrop = new Graphics();
+  private readonly challengeModalPanel = new Graphics();
+  private readonly challengeModalTitle = new Text({
+    text: 'Challenge Code',
+    style: {
+      fill: 0xf4e2b5,
+      fontFamily: 'monospace',
+      fontSize: 24,
+      fontWeight: 'bold',
+    },
+  });
+  private readonly challengeModalHint = new Text({
+    text: 'Share this code to recreate this run setup.',
+    style: {
+      fill: 0xc3daf6,
+      fontFamily: 'monospace',
+      fontSize: 14,
+    },
+  });
+  private readonly challengeModalStatus = new Text({
+    text: '',
+    style: {
+      fill: 0xa7cdf4,
+      fontFamily: 'monospace',
+      fontSize: 13,
+    },
+  });
+  private readonly challengeCopyCodeButton: TextButton;
+  private readonly challengeCopyShareButton: TextButton;
+  private readonly challengeCloseButton: TextButton;
 
   private shareText = '';
+  private challengeCode = '';
+  private challengeModalOpen = false;
+  private challengeCodeTextArea: HTMLTextAreaElement | null = null;
   private shareCardData: ShareCardData | null = null;
   private isDailyRun = false;
   private ended = false;
@@ -84,6 +126,11 @@ export class RunEndState implements IGameState {
       width: 220,
       onClick: () => this.copyResult(),
     });
+    this.createChallengeButton = new TextButton({
+      label: 'Create Challenge Code',
+      width: 240,
+      onClick: () => this.openChallengeModal(),
+    });
     this.downloadCardButton = new TextButton({
       label: 'Download Share Card (PNG)',
       width: 260,
@@ -99,14 +146,44 @@ export class RunEndState implements IGameState {
       width: 220,
       onClick: () => this.backToTitle(),
     });
+    this.challengeCopyCodeButton = new TextButton({
+      label: 'Copy Code',
+      width: 190,
+      onClick: () => this.copyChallengeCode(),
+    });
+    this.challengeCopyShareButton = new TextButton({
+      label: 'Copy Share Text',
+      width: 210,
+      onClick: () => this.copyChallengeShareText(),
+    });
+    this.challengeCloseButton = new TextButton({
+      label: 'Close',
+      width: 160,
+      onClick: () => this.closeChallengeModal(),
+    });
 
     this.root.addChild(this.title);
     this.root.addChild(this.body);
     this.root.addChild(this.status);
     this.root.addChild(this.copyButton);
+    this.root.addChild(this.createChallengeButton);
     this.root.addChild(this.downloadCardButton);
     this.root.addChild(this.newDailyButton);
     this.root.addChild(this.backButton);
+
+    this.challengeModal.visible = false;
+    this.challengeModalTitle.anchor.set(0.5, 0.5);
+    this.challengeModalHint.anchor.set(0.5, 0.5);
+    this.challengeModalStatus.anchor.set(0.5, 0.5);
+    this.challengeModal.addChild(this.challengeModalBackdrop);
+    this.challengeModal.addChild(this.challengeModalPanel);
+    this.challengeModal.addChild(this.challengeModalTitle);
+    this.challengeModal.addChild(this.challengeModalHint);
+    this.challengeModal.addChild(this.challengeModalStatus);
+    this.challengeModal.addChild(this.challengeCopyCodeButton);
+    this.challengeModal.addChild(this.challengeCopyShareButton);
+    this.challengeModal.addChild(this.challengeCloseButton);
+    this.root.addChild(this.challengeModal);
   }
 
   onEnter(): void {
@@ -119,6 +196,8 @@ export class RunEndState implements IGameState {
     this.context.stage.addChild(this.root);
     this.ended = false;
     this.status.text = '';
+    this.challengeModalStatus.text = '';
+    this.closeChallengeModal();
     this.isDailyRun = campaign.runState.mode === 'DAILY';
     this.newDailyButton.visible = this.isDailyRun;
     this.downloadCardButton.visible = this.isDailyRun;
@@ -153,7 +232,7 @@ export class RunEndState implements IGameState {
     const difficultyLabel = runState.difficultyMode === DifficultyMode.HARD ? 'HARD' : 'NORMAL';
     const dateLine = runState.mode === 'DAILY' && runState.dateKey !== null ? `Date: ${runState.dateKey} (SG)` : 'Date: -';
 
-    this.shareCardData = {
+    const shareCardData: ShareCardData = {
       mode: runState.mode,
       dateKey: runState.dateKey,
       score: finalScore,
@@ -168,8 +247,9 @@ export class RunEndState implements IGameState {
       packVersion: contentStatus.contentVersion,
       urlPath: import.meta.env.BASE_URL,
     };
+    this.shareCardData = shareCardData;
 
-    this.shareText = buildShareResultText(this.shareCardData);
+    this.shareText = buildShareResultText(shareCardData);
 
     let dailyBestLine = '';
     if (this.isDailyRun && runState.dateKey !== null) {
@@ -209,10 +289,37 @@ export class RunEndState implements IGameState {
       `Avg Casualties: ${formatPercent(avgCasualties)}`,
       `Perks: ${perkList}`,
     ];
+    if (runState.mode === 'CHALLENGE' && runState.challengePayload !== null) {
+      bodyLines.push(
+        `Challenge: pack ${runState.challengePayload.packId} (${runState.challengePayload.packVersion})`,
+      );
+      bodyLines.push(
+        `Rules: objectiveNoRepeat=${runState.challengePayload.objectiveNoRepeat ? 'on' : 'off'}, mapNoRepeat=${runState.challengePayload.mapNoRepeat ? 'on' : 'off'}`,
+      );
+    }
     if (dailyBestLine.length > 0) {
       bodyLines.push(dailyBestLine);
     }
     this.body.text = bodyLines.join('\n');
+
+    const challengePayload: ChallengePayloadV1 = {
+      v: 1,
+      mode: 'CHALLENGE',
+      seed: runState.seed >>> 0,
+      difficulty: runState.difficultyMode,
+      dateKey: runState.mode === 'DAILY' && runState.dateKey ? runState.dateKey : undefined,
+      pack: {
+        id: contentStatus.loadedPackId,
+        name: contentStatus.loadedPackName,
+        version: contentStatus.contentVersion,
+      },
+      rules: {
+        objectiveNoRepeat: runState.objectiveNoRepeat,
+        mapNoRepeat: runState.mapNoRepeat,
+      },
+    };
+    this.challengeCode = encodeChallenge(challengePayload);
+    this.createChallengeButton.setEnabled(this.challengeCode.length > 0);
 
     this.context.recordDiagnosticEvent('RUN_END_VIEWED', {
       mode: runState.mode,
@@ -224,6 +331,7 @@ export class RunEndState implements IGameState {
   }
 
   onExit(): void {
+    this.closeChallengeModal();
     this.root.removeFromParent();
   }
 
@@ -237,6 +345,93 @@ export class RunEndState implements IGameState {
   private async copyResult(): Promise<void> {
     const ok = await copyTextWithFallback(this.shareText);
     this.status.text = ok ? 'Copied result text.' : 'Copy failed.';
+  }
+
+  private openChallengeModal(): void {
+    if (this.challengeCode.length === 0) {
+      this.status.text = 'Failed to generate challenge code.';
+      return;
+    }
+    this.challengeModalOpen = true;
+    this.challengeModal.visible = true;
+    this.challengeModalStatus.text = '';
+    this.ensureChallengeCodeTextArea();
+    this.layout();
+  }
+
+  private closeChallengeModal(): void {
+    this.challengeModalOpen = false;
+    this.challengeModal.visible = false;
+    this.destroyChallengeCodeTextArea();
+  }
+
+  private ensureChallengeCodeTextArea(): void {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    if (this.challengeCodeTextArea === null) {
+      const textArea = document.createElement('textarea');
+      textArea.readOnly = true;
+      textArea.value = this.challengeCode;
+      textArea.style.position = 'fixed';
+      textArea.style.zIndex = '30';
+      textArea.style.fontFamily = 'monospace';
+      textArea.style.fontSize = '12px';
+      textArea.style.background = '#0f1720';
+      textArea.style.color = '#d4e7ff';
+      textArea.style.border = '1px solid #6e9bc9';
+      textArea.style.borderRadius = '8px';
+      textArea.style.padding = '8px';
+      textArea.style.resize = 'none';
+      document.body.appendChild(textArea);
+      this.challengeCodeTextArea = textArea;
+    }
+    if (this.challengeCodeTextArea !== null) {
+      this.challengeCodeTextArea.value = this.challengeCode;
+    }
+    this.layoutChallengeCodeTextArea();
+  }
+
+  private destroyChallengeCodeTextArea(): void {
+    if (this.challengeCodeTextArea === null) {
+      return;
+    }
+    if (typeof document !== 'undefined') {
+      document.body.removeChild(this.challengeCodeTextArea);
+    }
+    this.challengeCodeTextArea = null;
+  }
+
+  private layoutChallengeCodeTextArea(): void {
+    if (!this.challengeModalOpen || this.challengeCodeTextArea === null) {
+      return;
+    }
+    const canvasRect = this.context.app.canvas.getBoundingClientRect();
+    const width = this.context.app.screen.width;
+    const height = this.context.app.screen.height;
+    const panelWidth = Math.min(860, width - 60);
+    const panelHeight = Math.min(420, height - 80);
+    const panelX = width * 0.5 - panelWidth * 0.5;
+    const panelY = height * 0.5 - panelHeight * 0.5;
+    const textLeft = canvasRect.left + panelX + 24;
+    const textTop = canvasRect.top + panelY + 98;
+    const textWidth = panelWidth - 48;
+    const textHeight = panelHeight - 192;
+    this.challengeCodeTextArea.style.left = `${Math.round(textLeft)}px`;
+    this.challengeCodeTextArea.style.top = `${Math.round(textTop)}px`;
+    this.challengeCodeTextArea.style.width = `${Math.round(textWidth)}px`;
+    this.challengeCodeTextArea.style.height = `${Math.round(textHeight)}px`;
+  }
+
+  private async copyChallengeCode(): Promise<void> {
+    const code = this.challengeCodeTextArea ? this.challengeCodeTextArea.value : this.challengeCode;
+    const ok = await copyTextWithFallback(code);
+    this.challengeModalStatus.text = ok ? 'Copied challenge code.' : 'Copy failed.';
+  }
+
+  private async copyChallengeShareText(): Promise<void> {
+    const ok = await copyTextWithFallback(this.shareText);
+    this.challengeModalStatus.text = ok ? 'Copied share text.' : 'Copy failed.';
   }
 
   private async downloadCard(): Promise<void> {
@@ -312,15 +507,42 @@ export class RunEndState implements IGameState {
     this.body.position.set(width * 0.5, panelY + 78);
     this.status.position.set(width * 0.5, panelY + panelHeight - 84);
 
-    const buttonY = panelY + panelHeight - 56;
+    const buttonYTop = panelY + panelHeight - 102;
+    const buttonYBottom = panelY + panelHeight - 54;
     if (this.isDailyRun) {
-      this.copyButton.position.set(width * 0.5 - 450, buttonY);
-      this.downloadCardButton.position.set(width * 0.5 - 220, buttonY);
-      this.newDailyButton.position.set(width * 0.5 + 50, buttonY);
-      this.backButton.position.set(width * 0.5 + 280, buttonY);
+      this.copyButton.position.set(width * 0.5 - 380, buttonYTop);
+      this.createChallengeButton.position.set(width * 0.5 - 140, buttonYTop);
+      this.downloadCardButton.position.set(width * 0.5 + 120, buttonYTop);
+      this.newDailyButton.position.set(width * 0.5 - 140, buttonYBottom);
+      this.backButton.position.set(width * 0.5 + 120, buttonYBottom);
     } else {
-      this.copyButton.position.set(width * 0.5 - 230, buttonY);
-      this.backButton.position.set(width * 0.5 + 10, buttonY);
+      this.copyButton.position.set(width * 0.5 - 250, buttonYBottom);
+      this.createChallengeButton.position.set(width * 0.5 - 10, buttonYBottom);
+      this.backButton.position.set(width * 0.5 + 250, buttonYBottom);
+    }
+
+    if (this.challengeModalOpen) {
+      const modalWidth = Math.min(860, width - 60);
+      const modalHeight = Math.min(420, height - 80);
+      const modalX = width * 0.5 - modalWidth * 0.5;
+      const modalY = height * 0.5 - modalHeight * 0.5;
+
+      this.challengeModalBackdrop.clear();
+      this.challengeModalBackdrop.rect(0, 0, width, height);
+      this.challengeModalBackdrop.fill({ color: 0x000000, alpha: 0.68 });
+
+      this.challengeModalPanel.clear();
+      this.challengeModalPanel.roundRect(modalX, modalY, modalWidth, modalHeight, 12);
+      this.challengeModalPanel.fill({ color: 0x111c29, alpha: 0.98 });
+      this.challengeModalPanel.stroke({ color: 0x6e9bc9, alpha: 0.92, width: 1.6 });
+
+      this.challengeModalTitle.position.set(width * 0.5, modalY + 34);
+      this.challengeModalHint.position.set(width * 0.5, modalY + 62);
+      this.challengeModalStatus.position.set(width * 0.5, modalY + modalHeight - 88);
+      this.challengeCopyCodeButton.position.set(width * 0.5 - 300, modalY + modalHeight - 62);
+      this.challengeCopyShareButton.position.set(width * 0.5 - 96, modalY + modalHeight - 62);
+      this.challengeCloseButton.position.set(width * 0.5 + 128, modalY + modalHeight - 62);
+      this.layoutChallengeCodeTextArea();
     }
   }
 }

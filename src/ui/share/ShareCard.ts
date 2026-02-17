@@ -2,7 +2,7 @@ import { Container, Graphics, Text } from 'pixi.js';
 import type { DifficultyMode } from '../../meta/Difficulty';
 
 export interface ShareCardData {
-  mode: 'DAILY' | 'NORMAL';
+  mode: 'DAILY' | 'NORMAL' | 'CHALLENGE';
   dateKey: string | null;
   score: number;
   difficulty: DifficultyMode;
@@ -79,7 +79,9 @@ export function buildShareResultText(data: ShareCardData): string {
   const header =
     data.mode === 'DAILY' && data.dateKey !== null
       ? `NIZAM Daily Challenge - ${data.dateKey} (SG)`
-      : 'NIZAM Run Result';
+      : data.mode === 'CHALLENGE'
+        ? 'NIZAM Challenge Run'
+        : 'NIZAM Run Result';
   const perksText = data.perks.length > 0 ? data.perks.join(', ') : 'None';
 
   return [
@@ -108,7 +110,7 @@ export function createShareCardContainer(data: ShareCardData): Container {
   root.addChild(topBand);
 
   const title = new Text({
-    text: data.mode === 'DAILY' ? 'NIZAM Daily Challenge' : 'NIZAM Run Result',
+    text: data.mode === 'DAILY' ? 'NIZAM Daily Challenge' : data.mode === 'CHALLENGE' ? 'NIZAM Challenge Run' : 'NIZAM Run Result',
     style: {
       fill: 0xf8e6bd,
       fontFamily: 'monospace',

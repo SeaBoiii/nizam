@@ -1,5 +1,12 @@
 import { Container, Graphics, Text } from 'pixi.js';
+import { contentManager } from '../../content/ContentManager';
 import type { ContentLoadStatus, ContentPackManifestEntry } from '../../content/ContentTypes';
+import {
+  decodeChallenge,
+  validatePayloadAgainstContent,
+  type ChallengePayloadV1,
+  type ChallengeCompatibilityResult,
+} from '../../meta/ChallengeCode';
 import { getDailySeed } from '../../meta/DailyChallenge';
 import { getBestForDate } from '../../meta/DailyResults';
 import { DifficultyMode } from '../../meta/Difficulty';
@@ -94,6 +101,8 @@ export class TitleState implements IGameState {
   private readonly newRunButton: TextButton;
   private readonly dailyRunButton: TextButton;
   private readonly continueDailyButton: TextButton;
+  private readonly continueChallengeButton: TextButton;
+  private readonly playChallengeButton: TextButton;
   private readonly continueButton: TextButton;
   private readonly clearButton: TextButton;
   private readonly statsButton: TextButton;
@@ -102,13 +111,52 @@ export class TitleState implements IGameState {
   private readonly hardButton: TextButton;
   private readonly packPrevButton: TextButton;
   private readonly packNextButton: TextButton;
+  private readonly challengeModal = new Container();
+  private readonly challengeModalBackdrop = new Graphics();
+  private readonly challengeModalPanel = new Graphics();
+  private readonly challengeModalTitle = new Text({
+    text: 'Play Challenge Code',
+    style: {
+      fill: 0xf4e2b5,
+      fontFamily: 'monospace',
+      fontSize: 24,
+      fontWeight: 'bold',
+    },
+  });
+  private readonly challengeModalHint = new Text({
+    text: 'Paste challenge code, validate, then start.',
+    style: {
+      fill: 0xc5dcf7,
+      fontFamily: 'monospace',
+      fontSize: 13,
+    },
+  });
+  private readonly challengeModalStatus = new Text({
+    text: '',
+    style: {
+      fill: 0x9dd1ff,
+      fontFamily: 'monospace',
+      fontSize: 13,
+      wordWrap: true,
+      wordWrapWidth: 640,
+    },
+  });
+  private readonly challengeValidateButton: TextButton;
+  private readonly challengeStartButton: TextButton;
+  private readonly challengeCloseButton: TextButton;
 
   private selectedDifficulty = DifficultyMode.NORMAL;
   private availablePacks: ContentPackManifestEntry[] = [];
   private selectedPackIndex = 0;
   private loadingPack = false;
   private loadingDaily = false;
+  private loadingChallenge = false;
   private mounted = false;
+  private challengeModalOpen = false;
+  private challengeInputArea: HTMLTextAreaElement | null = null;
+  private challengePayload: ChallengePayloadV1 | null = null;
+  private challengeCompatibility: ChallengeCompatibilityResult | null = null;
+  private challengeVersionMismatchConfirmed = false;
 
   constructor(private readonly context: StateContext) {
     this.root.addChild(this.bg);
@@ -149,6 +197,26 @@ export class TitleState implements IGameState {
           return;
         }
         void this.continueDailyChallenge();
+      },
+    });
+
+    this.continueChallengeButton = new TextButton({
+      label: 'Continue Challenge',
+      onClick: () => {
+        if (this.loadingPack || this.loadingDaily || this.loadingChallenge) {
+          return;
+        }
+        void this.continueChallengeRun();
+      },
+    });
+
+    this.playChallengeButton = new TextButton({
+      label: 'Play Challenge Code',
+      onClick: () => {
+        if (this.loadingPack || this.loadingDaily || this.loadingChallenge) {
+          return;
+        }
+        this.openChallengeModal();
       },
     });
 
@@ -221,6 +289,28 @@ export class TitleState implements IGameState {
       onClick: () => this.changePackByStep(1),
     });
 
+    this.challengeValidateButton = new TextButton({
+      label: 'Validate',
+      width: 180,
+      onClick: () => {
+        void this.validateChallengeInput();
+      },
+    });
+    this.challengeStartButton = new TextButton({
+      label: 'Start Challenge',
+      width: 220,
+      onClick: () => {
+        void this.startChallengeFromModal();
+      },
+    });
+    this.challengeCloseButton = new TextButton({
+      label: 'Close',
+      width: 160,
+      onClick: () => {
+        this.closeChallengeModal();
+      },
+    });
+
     this.root.addChild(this.title);
     this.root.addChild(this.subtitle);
     this.root.addChild(this.status);
@@ -233,6 +323,8 @@ export class TitleState implements IGameState {
     this.root.addChild(this.newRunButton);
     this.root.addChild(this.dailyRunButton);
     this.root.addChild(this.continueDailyButton);
+    this.root.addChild(this.continueChallengeButton);
+    this.root.addChild(this.playChallengeButton);
     this.root.addChild(this.continueButton);
     this.root.addChild(this.clearButton);
     this.root.addChild(this.statsButton);
@@ -241,11 +333,26 @@ export class TitleState implements IGameState {
     this.root.addChild(this.hardButton);
     this.root.addChild(this.packPrevButton);
     this.root.addChild(this.packNextButton);
+
+    this.challengeModal.visible = false;
+    this.challengeModalTitle.anchor.set(0.5, 0.5);
+    this.challengeModalHint.anchor.set(0.5, 0.5);
+    this.challengeModalStatus.anchor.set(0, 0);
+    this.challengeModal.addChild(this.challengeModalBackdrop);
+    this.challengeModal.addChild(this.challengeModalPanel);
+    this.challengeModal.addChild(this.challengeModalTitle);
+    this.challengeModal.addChild(this.challengeModalHint);
+    this.challengeModal.addChild(this.challengeModalStatus);
+    this.challengeModal.addChild(this.challengeValidateButton);
+    this.challengeModal.addChild(this.challengeStartButton);
+    this.challengeModal.addChild(this.challengeCloseButton);
+    this.root.addChild(this.challengeModal);
   }
 
   onEnter(): void {
     this.mounted = true;
     this.context.stage.addChild(this.root);
+    this.closeChallengeModal();
     this.layout();
     this.refreshDifficultyButtons();
     this.status.text = '';
@@ -266,6 +373,7 @@ export class TitleState implements IGameState {
 
   onExit(): void {
     this.mounted = false;
+    this.closeChallengeModal();
     this.root.removeFromParent();
   }
 
@@ -278,10 +386,12 @@ export class TitleState implements IGameState {
   }
 
   private refreshContinueState(): void {
-    const locked = this.loadingPack || this.loadingDaily;
+    const locked = this.loadingPack || this.loadingDaily || this.loadingChallenge;
     this.continueButton.setEnabled(this.context.hasSaveData() && !locked);
+    this.continueChallengeButton.setEnabled(this.context.hasChallengeSaveData() && !locked);
     this.newRunButton.setEnabled(!locked);
     this.dailyRunButton.setEnabled(!locked);
+    this.playChallengeButton.setEnabled(!locked);
     this.dailyHistoryButton.setEnabled(!locked);
     this.statsButton.setEnabled(!locked);
     this.continueDailyButton.setEnabled(false);
@@ -310,15 +420,19 @@ export class TitleState implements IGameState {
     this.newRunButton.position.set(width * 0.5 - 110, height * 0.54);
     this.dailyRunButton.position.set(width * 0.5 - 110, height * 0.615);
     this.continueDailyButton.position.set(width * 0.5 - 110, height * 0.69);
-    this.continueButton.position.set(width * 0.5 - 110, height * 0.765);
-    this.clearButton.position.set(width * 0.5 - 110, height * 0.84);
-    this.statsButton.position.set(width * 0.5 - 180, height * 0.915);
-    this.dailyHistoryButton.position.set(width * 0.5 + 10, height * 0.915);
+    this.playChallengeButton.position.set(width * 0.5 - 110, height * 0.765);
+    this.continueChallengeButton.position.set(width * 0.5 - 110, height * 0.84);
+    this.continueButton.position.set(width * 0.5 - 110, height * 0.895);
+    this.clearButton.position.set(width * 0.5 - 110, height * 0.945);
+    this.statsButton.position.set(width * 0.5 - 180, height * 0.995);
+    this.dailyHistoryButton.position.set(width * 0.5 + 10, height * 0.995);
 
-    this.difficultyText.position.set(width * 0.5 - 130, height * 0.94);
-    this.normalButton.position.set(width * 0.5 - 134, height * 0.965);
-    this.hardButton.position.set(width * 0.5 + 4, height * 0.965);
-    this.status.position.set(width * 0.5, height * 0.975);
+    this.difficultyText.position.set(width * 0.5 - 130, height * 0.93);
+    this.normalButton.position.set(width * 0.5 - 134, height * 0.96);
+    this.hardButton.position.set(width * 0.5 + 4, height * 0.96);
+    this.status.position.set(width * 0.5, height * 0.99);
+
+    this.layoutChallengeModal(width, height);
   }
 
   private refreshDifficultyButtons(): void {
@@ -372,12 +486,14 @@ export class TitleState implements IGameState {
     const selectedPack = this.getSelectedPack();
     const dailySave = this.context.getDailySaveInfo();
     const bestToday = getBestForDate(today.dateKey);
-    const locked = this.loadingPack || this.loadingDaily;
+    const locked = this.loadingPack || this.loadingDaily || this.loadingChallenge;
 
     if (locked) {
       this.dailyText.text = 'Daily: preparing...';
       this.continueDailyButton.setEnabled(false);
       this.continueDailyButton.setLabel('Continue Daily');
+      this.continueChallengeButton.setEnabled(false);
+      this.continueChallengeButton.setLabel('Continue Challenge');
       return;
     }
 
@@ -404,6 +520,14 @@ export class TitleState implements IGameState {
       this.continueDailyButton.setEnabled(false);
       this.continueDailyButton.setLabel(`Saved Daily: ${dailySave.dateKey ?? 'Unknown'}`);
       lines.push(`Saved daily run is from ${dailySave.dateKey ?? 'Unknown'} (SG).`);
+    }
+
+    if (this.context.hasChallengeSaveData()) {
+      this.continueChallengeButton.setEnabled(true);
+      this.continueChallengeButton.setLabel('Continue Challenge');
+    } else {
+      this.continueChallengeButton.setEnabled(false);
+      this.continueChallengeButton.setLabel('Continue Challenge');
     }
 
     this.dailyText.text = lines.join('\n');
@@ -474,6 +598,254 @@ export class TitleState implements IGameState {
         this.refreshDailyUI();
       }
     }
+  }
+
+  private async continueChallengeRun(): Promise<void> {
+    this.loadingChallenge = true;
+    this.status.text = '';
+    this.refreshContinueState();
+    this.refreshDailyUI();
+
+    try {
+      const loaded = await this.context.loadChallengeSaveData();
+      if (!this.mounted) {
+        return;
+      }
+      if (!loaded) {
+        this.status.text = 'No valid challenge save found.';
+        return;
+      }
+      this.context.transitionTo('OVERWORLD');
+    } catch (error) {
+      if (!this.mounted) {
+        return;
+      }
+      this.status.text = `Continue challenge failed: ${String(error)}`;
+    } finally {
+      this.loadingChallenge = false;
+      if (this.mounted) {
+        this.refreshContinueState();
+        this.refreshDailyUI();
+      }
+    }
+  }
+
+  private openChallengeModal(): void {
+    this.challengeModalOpen = true;
+    this.challengeModal.visible = true;
+    this.challengePayload = null;
+    this.challengeCompatibility = null;
+    this.challengeVersionMismatchConfirmed = false;
+    this.challengeModalStatus.text = '';
+    this.challengeStartButton.setLabel('Start Challenge');
+    this.challengeStartButton.setEnabled(false);
+    this.ensureChallengeInputArea();
+    this.layout();
+  }
+
+  private closeChallengeModal(): void {
+    this.challengeModalOpen = false;
+    this.challengeModal.visible = false;
+    this.challengePayload = null;
+    this.challengeCompatibility = null;
+    this.challengeVersionMismatchConfirmed = false;
+    this.destroyChallengeInputArea();
+  }
+
+  private ensureChallengeInputArea(): void {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    if (this.challengeInputArea === null) {
+      const area = document.createElement('textarea');
+      area.placeholder = 'Paste challenge code here...';
+      area.style.position = 'fixed';
+      area.style.zIndex = '30';
+      area.style.fontFamily = 'monospace';
+      area.style.fontSize = '12px';
+      area.style.background = '#0f1720';
+      area.style.color = '#d4e7ff';
+      area.style.border = '1px solid #6e9bc9';
+      area.style.borderRadius = '8px';
+      area.style.padding = '8px';
+      area.style.resize = 'none';
+      area.addEventListener('input', () => {
+        this.challengePayload = null;
+        this.challengeCompatibility = null;
+        this.challengeVersionMismatchConfirmed = false;
+        this.challengeStartButton.setLabel('Start Challenge');
+        this.challengeStartButton.setEnabled(false);
+      });
+      document.body.appendChild(area);
+      this.challengeInputArea = area;
+    }
+    this.layoutChallengeInputArea();
+  }
+
+  private destroyChallengeInputArea(): void {
+    if (this.challengeInputArea === null) {
+      return;
+    }
+    if (typeof document !== 'undefined') {
+      document.body.removeChild(this.challengeInputArea);
+    }
+    this.challengeInputArea = null;
+  }
+
+  private layoutChallengeInputArea(): void {
+    if (!this.challengeModalOpen || this.challengeInputArea === null) {
+      return;
+    }
+    const width = this.context.app.screen.width;
+    const height = this.context.app.screen.height;
+    const modalWidth = Math.min(760, width - 60);
+    const modalHeight = Math.min(450, height - 80);
+    const modalX = width * 0.5 - modalWidth * 0.5;
+    const modalY = height * 0.5 - modalHeight * 0.5;
+    const canvasRect = this.context.app.canvas.getBoundingClientRect();
+
+    this.challengeInputArea.style.left = `${Math.round(canvasRect.left + modalX + 24)}px`;
+    this.challengeInputArea.style.top = `${Math.round(canvasRect.top + modalY + 88)}px`;
+    this.challengeInputArea.style.width = `${Math.round(modalWidth - 48)}px`;
+    this.challengeInputArea.style.height = `${Math.round(modalHeight - 218)}px`;
+  }
+
+  private async validateChallengeInput(): Promise<void> {
+    const input = this.challengeInputArea ? this.challengeInputArea.value.trim() : '';
+    this.challengeVersionMismatchConfirmed = false;
+    if (input.length === 0) {
+      this.challengePayload = null;
+      this.challengeCompatibility = null;
+      this.challengeModalStatus.text = 'Enter a challenge code first.';
+      this.challengeStartButton.setEnabled(false);
+      this.challengeStartButton.setLabel('Start Challenge');
+      return;
+    }
+
+    const decoded = decodeChallenge(input);
+    if (!decoded.ok || !decoded.payload) {
+      this.challengePayload = null;
+      this.challengeCompatibility = null;
+      this.challengeModalStatus.text = decoded.error ?? 'Invalid challenge code.';
+      this.challengeStartButton.setEnabled(false);
+      this.challengeStartButton.setLabel('Start Challenge');
+      return;
+    }
+
+    this.challengePayload = decoded.payload;
+    this.challengeCompatibility = validatePayloadAgainstContent(
+      decoded.payload,
+      contentManager,
+      this.availablePacks,
+    );
+
+    const compatibility = this.challengeCompatibility;
+    this.challengeModalStatus.text = compatibility.message;
+    if (compatibility.status === 'OK') {
+      this.challengeStartButton.setLabel('Start Challenge');
+      this.challengeStartButton.setEnabled(true);
+      return;
+    }
+    if (compatibility.status === 'PACK_MISMATCH') {
+      this.challengeStartButton.setLabel(`Switch to ${decoded.payload.pack.id} & Start`);
+      this.challengeStartButton.setEnabled(true);
+      return;
+    }
+    if (compatibility.status === 'VERSION_MISMATCH') {
+      this.challengeStartButton.setLabel('Start With Version Warning');
+      this.challengeStartButton.setEnabled(true);
+      return;
+    }
+    this.challengeStartButton.setLabel('Start Challenge');
+    this.challengeStartButton.setEnabled(false);
+  }
+
+  private async startChallengeFromModal(): Promise<void> {
+    if (this.challengePayload === null || this.challengeCompatibility === null) {
+      await this.validateChallengeInput();
+      if (this.challengePayload === null || this.challengeCompatibility === null) {
+        return;
+      }
+    }
+
+    if (
+      this.challengeCompatibility.status === 'PACK_NOT_FOUND' ||
+      this.challengeCompatibility.status === 'INVALID_SIGNATURE'
+    ) {
+      this.challengeModalStatus.text = this.challengeCompatibility.message;
+      return;
+    }
+
+    if (
+      this.challengeCompatibility.status === 'VERSION_MISMATCH' &&
+      !this.challengeVersionMismatchConfirmed
+    ) {
+      this.challengeVersionMismatchConfirmed = true;
+      this.challengeModalStatus.text = `${this.challengeCompatibility.message}\nPress Start again to continue anyway.`;
+      return;
+    }
+
+    const rawCode = this.challengeInputArea ? this.challengeInputArea.value.trim() : '';
+    this.loadingChallenge = true;
+    this.refreshContinueState();
+    this.refreshDailyUI();
+    this.challengeStartButton.setEnabled(false);
+
+    try {
+      const started = await this.context.startChallengeRun(this.challengePayload, rawCode);
+      if (!this.mounted) {
+        return;
+      }
+      if (!started) {
+        this.challengeModalStatus.text = 'Failed to start challenge run.';
+        this.challengeStartButton.setEnabled(true);
+        return;
+      }
+      this.closeChallengeModal();
+      this.context.transitionTo('OVERWORLD');
+    } catch (error) {
+      if (!this.mounted) {
+        return;
+      }
+      this.challengeModalStatus.text = `Challenge start failed: ${String(error)}`;
+      this.challengeStartButton.setEnabled(true);
+    } finally {
+      this.loadingChallenge = false;
+      if (this.mounted) {
+        this.refreshContinueState();
+        this.refreshDailyUI();
+      }
+    }
+  }
+
+  private layoutChallengeModal(width: number, height: number): void {
+    if (!this.challengeModalOpen) {
+      return;
+    }
+    const modalWidth = Math.min(760, width - 60);
+    const modalHeight = Math.min(450, height - 80);
+    const modalX = width * 0.5 - modalWidth * 0.5;
+    const modalY = height * 0.5 - modalHeight * 0.5;
+
+    this.challengeModalBackdrop.clear();
+    this.challengeModalBackdrop.rect(0, 0, width, height);
+    this.challengeModalBackdrop.fill({ color: 0x000000, alpha: 0.7 });
+
+    this.challengeModalPanel.clear();
+    this.challengeModalPanel.roundRect(modalX, modalY, modalWidth, modalHeight, 12);
+    this.challengeModalPanel.fill({ color: 0x111c29, alpha: 0.98 });
+    this.challengeModalPanel.stroke({ color: 0x6e9bc9, alpha: 0.92, width: 1.6 });
+
+    this.challengeModalTitle.position.set(width * 0.5, modalY + 34);
+    this.challengeModalHint.position.set(width * 0.5, modalY + 58);
+    this.challengeModalStatus.style.wordWrapWidth = modalWidth - 44;
+    this.challengeModalStatus.position.set(modalX + 22, modalY + modalHeight - 130);
+
+    this.challengeValidateButton.position.set(width * 0.5 - 292, modalY + modalHeight - 62);
+    this.challengeStartButton.position.set(width * 0.5 - 96, modalY + modalHeight - 62);
+    this.challengeCloseButton.position.set(width * 0.5 + 144, modalY + modalHeight - 62);
+
+    this.layoutChallengeInputArea();
   }
 
   private async applySelectedPack(nextIndex: number): Promise<void> {

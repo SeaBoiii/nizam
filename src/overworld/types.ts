@@ -1,7 +1,17 @@
 import type { DifficultyMode } from '../meta/Difficulty';
 
 export type NodeType = 'BATTLE' | 'SHOP' | 'RECRUIT' | 'REST' | 'ELITE' | 'BOSS';
-export type RunMode = 'NORMAL' | 'DAILY';
+export type RunMode = 'NORMAL' | 'DAILY' | 'CHALLENGE';
+
+export interface RunChallengePayloadSummary {
+  seed: number;
+  difficulty: DifficultyMode;
+  packId: string;
+  packVersion: string;
+  dateKey: string | null;
+  objectiveNoRepeat: boolean;
+  mapNoRepeat: boolean;
+}
 
 export interface RunScoreBreakdown {
   baseScore: number;
@@ -51,4 +61,8 @@ export interface RunState {
   lastMapId: string | null;
   finalScore: number | null;
   scoreBreakdown: RunScoreBreakdown | null;
+  objectiveNoRepeat: boolean;
+  mapNoRepeat: boolean;
+  challengeCode: string | null;
+  challengePayload: RunChallengePayloadSummary | null;
 }

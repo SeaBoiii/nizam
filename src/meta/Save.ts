@@ -6,8 +6,9 @@ import type { MapState, Node, RunMode, RunScoreBreakdown, RunState } from '../ov
 
 const NORMAL_SAVE_KEY = 'nizam_save_v1';
 const DAILY_SAVE_KEY = 'nizam_save_daily_v1';
-const SAVE_VERSION = 4;
-export type SaveSlot = 'normal' | 'daily';
+const CHALLENGE_SAVE_KEY = 'nizam_save_challenge_v1';
+const SAVE_VERSION = 5;
+export type SaveSlot = 'normal' | 'daily' | 'challenge';
 
 interface LegacySaveV1 {
   version: number;
@@ -65,7 +66,31 @@ function asNullableString(value: unknown): string | null {
 }
 
 function asRunMode(value: unknown): RunMode {
-  return value === 'DAILY' ? 'DAILY' : 'NORMAL';
+  if (value === 'DAILY') {
+    return 'DAILY';
+  }
+  if (value === 'CHALLENGE') {
+    return 'CHALLENGE';
+  }
+  return 'NORMAL';
+}
+
+function sanitizeChallengePayloadSummary(value: unknown): RunState['challengePayload'] {
+  if (!isObject(value)) {
+    return null;
+  }
+  if (typeof value.packId !== 'string' || typeof value.packVersion !== 'string') {
+    return null;
+  }
+  return {
+    seed: Math.max(0, Math.floor(asNumber(value.seed, 0))) >>> 0,
+    difficulty: normalizeDifficultyMode(value.difficulty),
+    packId: asString(value.packId, 'base'),
+    packVersion: asString(value.packVersion, 'unknown'),
+    dateKey: asNullableString(value.dateKey),
+    objectiveNoRepeat: typeof value.objectiveNoRepeat === 'boolean' ? value.objectiveNoRepeat : true,
+    mapNoRepeat: typeof value.mapNoRepeat === 'boolean' ? value.mapNoRepeat : true,
+  };
 }
 
 function sanitizeScoreBreakdown(value: unknown): RunScoreBreakdown | null {
@@ -138,6 +163,10 @@ function sanitizeRunState(value: unknown): RunState | null {
       ? Math.max(0, Math.floor(asNumber(value.finalScore, 0)))
       : null,
     scoreBreakdown: sanitizeScoreBreakdown(value.scoreBreakdown),
+    objectiveNoRepeat: typeof value.objectiveNoRepeat === 'boolean' ? value.objectiveNoRepeat : true,
+    mapNoRepeat: typeof value.mapNoRepeat === 'boolean' ? value.mapNoRepeat : true,
+    challengeCode: asNullableString(value.challengeCode),
+    challengePayload: sanitizeChallengePayloadSummary(value.challengePayload),
   };
 }
 
@@ -305,6 +334,10 @@ function migrateRunState(runState: RunState, mapState: MapState): RunState {
         ? Math.max(0, Math.floor(runState.finalScore))
         : null,
     scoreBreakdown: runState.scoreBreakdown ?? null,
+    objectiveNoRepeat: typeof runState.objectiveNoRepeat === 'boolean' ? runState.objectiveNoRepeat : true,
+    mapNoRepeat: typeof runState.mapNoRepeat === 'boolean' ? runState.mapNoRepeat : true,
+    challengeCode: runState.challengeCode ?? null,
+    challengePayload: runState.challengePayload ?? null,
   };
 }
 
@@ -331,6 +364,25 @@ function normalizeSaveShape(raw: unknown): SaveGameData | null {
     };
   }
 
+  if (asNumber(raw.saveVersion, -1) === 4) {
+    const runState = sanitizeRunState(raw.runState);
+    const armyState = sanitizeArmyState(raw.armyState);
+    const mapState = sanitizeMapState(raw.mapState);
+    const perkState = sanitizePerkState(raw.perkState);
+    if (runState === null || armyState === null || mapState === null) {
+      return null;
+    }
+    console.warn('[Save] Migrated save v4 to v5.');
+    return {
+      saveVersion: SAVE_VERSION,
+      contentVersion: asString(raw.contentVersion, contentManager.getStatus().contentVersion),
+      runState: migrateRunState(runState, mapState),
+      armyState,
+      perkState,
+      mapState,
+    };
+  }
+
   if (asNumber(raw.saveVersion, -1) === 3) {
     const legacy = raw as unknown as LegacySaveV3;
     const runState = sanitizeRunState(legacy.runState);
@@ -340,7 +392,7 @@ function normalizeSaveShape(raw: unknown): SaveGameData | null {
     if (runState === null || armyState === null || mapState === null) {
       return null;
     }
-    console.warn('[Save] Migrated save v3 to v4.');
+    console.warn('[Save] Migrated save v3 to v5.');
     return {
       saveVersion: SAVE_VERSION,
       contentVersion: asString(legacy.contentVersion, contentManager.getStatus().contentVersion),
@@ -359,7 +411,7 @@ function normalizeSaveShape(raw: unknown): SaveGameData | null {
     if (runState === null || armyState === null || mapState === null) {
       return null;
     }
-    console.warn('[Save] Migrated save v2 to v3.');
+    console.warn('[Save] Migrated save v2 to v5.');
     return {
       saveVersion: SAVE_VERSION,
       contentVersion: asString(legacy.contentVersion, contentManager.getStatus().contentVersion),
@@ -378,7 +430,7 @@ function normalizeSaveShape(raw: unknown): SaveGameData | null {
     if (runState === null || armyState === null || mapState === null) {
       return null;
     }
-    console.warn('[Save] Migrated legacy save v1 to v3.');
+    console.warn('[Save] Migrated legacy save v1 to v5.');
     return {
       saveVersion: SAVE_VERSION,
       contentVersion: contentManager.getStatus().contentVersion,
@@ -393,7 +445,13 @@ function normalizeSaveShape(raw: unknown): SaveGameData | null {
 }
 
 function resolveSaveKey(slot: SaveSlot): string {
-  return slot === 'daily' ? DAILY_SAVE_KEY : NORMAL_SAVE_KEY;
+  if (slot === 'daily') {
+    return DAILY_SAVE_KEY;
+  }
+  if (slot === 'challenge') {
+    return CHALLENGE_SAVE_KEY;
+  }
+  return NORMAL_SAVE_KEY;
 }
 
 export function saveGame(data: Omit<SaveGameData, 'saveVersion' | 'contentVersion'>, slot: SaveSlot = 'normal'): void {

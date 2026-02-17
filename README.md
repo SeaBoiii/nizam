@@ -143,6 +143,8 @@ If a selected pack is missing/invalid, the loader falls back to `base`. If `base
 - Title: `Daily Challenge` starts a seeded daily run (Asia/Singapore date)
 - Title: `Continue Daily` resumes only today's daily save (if available)
 - Title: `Daily History` opens local daily result history (copy/download old results)
+- Title: `Play Challenge Code` opens import modal for shared challenge strings
+- Title: `Continue Challenge` resumes challenge-save slot if present
 - Title: pick `Normal` or `Hard` before `New Run`
 - Overworld: left click connected nodes to advance, click `Back To Title` to return
 - Battle camera pan: `WASD` or Arrow keys
@@ -282,6 +284,30 @@ After content reload, restart battle/run to apply changes to newly spawned units
   - `Copy Result Text` for sharing text in chats/issues
 - Daily run summaries also provide `Download Share Card (PNG)` generated fully client-side from Pixi.
 - Share strings include content pack/version so comparisons are meaningful.
+
+## Challenge Codes (Sprint 17.1)
+
+- Challenge Codes are compact base64url strings that encode seeded run setup:
+  - seed
+  - difficulty
+  - pack id + version lock
+  - streak-protection rule flags
+- Export:
+  - On Run Summary, click `Create Challenge Code` to open a modal.
+  - Use `Copy Code` to share.
+- Import:
+  - On Title, click `Play Challenge Code`.
+  - Paste code, click `Validate`, then `Start Challenge`.
+- Compatibility checks shown in modal:
+  - `OK`: starts directly
+  - `PACK_MISMATCH`: offers auto-switch to required pack and start
+  - `PACK_NOT_FOUND`: disabled until pack is installed
+  - `VERSION_MISMATCH`: allowed with explicit warning confirmation
+  - `INVALID_SIGNATURE`: rejected
+- Challenge runs use a separate save slot:
+  - `nizam_save_challenge_v1`
+  - Normal and Daily saves are not overwritten.
+- No leaderboard/backend: sharing is local-only + manual copy/paste.
 
 ## Daily Share Card + Local History (Sprint 16.1)
 

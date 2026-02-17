@@ -4,6 +4,7 @@ import { contentManager } from '../content/ContentManager';
 import type { ContentLoadStatus } from '../content/ContentTypes';
 import { createStartingArmy } from '../meta/Army';
 import { buildBugReport } from '../meta/BugReport';
+import type { ChallengePayloadV1 } from '../meta/ChallengeCode';
 import { getDailySeed, getSingaporeDateKey } from '../meta/DailyChallenge';
 import { DifficultyMode } from '../meta/Difficulty';
 import { createPerkState } from '../meta/Perks';
@@ -79,13 +80,17 @@ export class Game {
       },
       startNewRun: (mode) => this.startNewRun(mode),
       startDailyRun: (mode) => this.startDailyRun(mode),
+      startChallengeRun: (payload, rawCode) => this.startChallengeRun(payload, rawCode),
       hasSaveData: () => hasSave('normal'),
+      hasChallengeSaveData: () => hasSave('challenge'),
       loadSaveData: () => this.loadSaveData(),
       getDailySaveInfo: () => this.getDailySaveInfo(),
       loadDailySaveData: () => this.loadDailySaveData(),
+      loadChallengeSaveData: () => this.loadChallengeSaveData(),
       saveCampaignData: () => this.saveCampaignData(),
       clearSaveData: () => this.clearSaveData(),
       clearDailySaveData: () => this.clearDailySaveData(),
+      clearChallengeSaveData: () => this.clearChallengeSaveData(),
       clearActiveRunSave: () => this.clearActiveRunSave(),
       getActiveSaveSlot: () => this.getActiveSaveSlot(),
       endCurrentRunSession: () => this.endCurrentRunSession(),
@@ -269,6 +274,10 @@ export class Game {
       lastMapId: null,
       finalScore: null,
       scoreBreakdown: null,
+      objectiveNoRepeat: true,
+      mapNoRepeat: true,
+      challengeCode: null,
+      challengePayload: null,
     };
 
     for (let i = 0; i < mapState.nodes.length; i += 1) {
@@ -328,6 +337,10 @@ export class Game {
       lastMapId: null,
       finalScore: null,
       scoreBreakdown: null,
+      objectiveNoRepeat: true,
+      mapNoRepeat: true,
+      challengeCode: null,
+      challengePayload: null,
     };
 
     for (let i = 0; i < mapState.nodes.length; i += 1) {
@@ -384,6 +397,99 @@ export class Game {
     }
 
     const status = await this.setContentPack('base', true);
+    if (!status.loaded || status.loadedPackId === 'embedded') {
+      return false;
+    }
+
+    return this.applyLoadedSave(loaded);
+  }
+
+  private async startChallengeRun(payload: ChallengePayloadV1, rawCode: string): Promise<boolean> {
+    if (this.campaignData !== null && this.campaignData.runState.finalScore === null) {
+      this.statsCollector.onRunAbandoned(this.campaignData.runState, this.campaignData.perkState);
+    }
+
+    const status = await this.setContentPack(payload.pack.id, true);
+    if (!status.loaded || status.loadedPackId !== payload.pack.id || status.loadedPackId === 'embedded') {
+      return false;
+    }
+
+    const seed = payload.seed >>> 0;
+    const difficultyMode = payload.difficulty === DifficultyMode.HARD ? DifficultyMode.HARD : DifficultyMode.NORMAL;
+    const mapState = generateMap(seed);
+    const objectiveNoRepeat = payload.rules?.objectiveNoRepeat ?? true;
+    const mapNoRepeat = payload.rules?.mapNoRepeat ?? true;
+
+    const runState: RunState = {
+      seed,
+      mode: 'CHALLENGE',
+      dateKey: payload.dateKey ?? null,
+      packIdLocked: payload.pack.id,
+      currentNodeId: mapState.startNodeId,
+      clearedNodeIds: [mapState.startNodeId],
+      step: 0,
+      difficultyTier: 1,
+      difficultyMode,
+      restBonusBattles: 0,
+      battleNodesCleared: 0,
+      lastRewardedNodeId: '',
+      consecutiveLosses: 0,
+      lastObjectiveType: null,
+      lastMapId: null,
+      finalScore: null,
+      scoreBreakdown: null,
+      objectiveNoRepeat,
+      mapNoRepeat,
+      challengeCode: rawCode.trim(),
+      challengePayload: {
+        seed,
+        difficulty: difficultyMode,
+        packId: payload.pack.id,
+        packVersion: payload.pack.version,
+        dateKey: payload.dateKey ?? null,
+        objectiveNoRepeat,
+        mapNoRepeat,
+      },
+    };
+
+    for (let i = 0; i < mapState.nodes.length; i += 1) {
+      const node = mapState.nodes[i];
+      node.cleared = node.id === mapState.startNodeId;
+    }
+
+    this.campaignData = {
+      runState,
+      armyState: createStartingArmy(),
+      perkState: createPerkState(),
+      mapState,
+    };
+
+    this.pendingScenario = null;
+    this.lastBattleResult = null;
+    this.lastObjectiveStage = undefined;
+    this.eventRecorder.clear();
+    this.statsCollector.onRunStarted(runState, this.campaignData.perkState);
+    this.eventRecorder.record('RUN_STARTED', {
+      seed,
+      difficulty: difficultyMode,
+      startNodeId: mapState.startNodeId,
+      mode: 'CHALLENGE',
+      packId: payload.pack.id,
+      packVersion: payload.pack.version,
+    });
+
+    this.saveCampaignData();
+    return true;
+  }
+
+  private async loadChallengeSaveData(): Promise<boolean> {
+    const loaded = loadGame('challenge');
+    if (loaded === null || loaded.runState.mode !== 'CHALLENGE') {
+      return false;
+    }
+
+    const desiredPackId = loaded.runState.packIdLocked ?? loaded.runState.challengePayload?.packId ?? 'base';
+    const status = await this.setContentPack(desiredPackId, true);
     if (!status.loaded || status.loadedPackId === 'embedded') {
       return false;
     }
@@ -473,6 +579,10 @@ export class Game {
     clearSave('daily');
   }
 
+  private clearChallengeSaveData(): void {
+    clearSave('challenge');
+  }
+
   private clearActiveRunSave(): void {
     const slot = this.getActiveSaveSlot();
     if (slot !== null) {
@@ -484,7 +594,13 @@ export class Game {
     if (this.campaignData === null) {
       return null;
     }
-    return this.campaignData.runState.mode === 'DAILY' ? 'daily' : 'normal';
+    if (this.campaignData.runState.mode === 'DAILY') {
+      return 'daily';
+    }
+    if (this.campaignData.runState.mode === 'CHALLENGE') {
+      return 'challenge';
+    }
+    return 'normal';
   }
 
   private endCurrentRunSession(): void {

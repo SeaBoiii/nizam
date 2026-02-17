@@ -212,7 +212,7 @@ export function selectObjectiveType(nodeId: string, nodeType: NodeType, runState
   }
 
   const weights = objectives.selectionWeightsByNodeType[selectionKey];
-  const useStreakProtection = shouldApplyStreakProtection(nodeId, runState);
+  const useStreakProtection = runState.objectiveNoRepeat && shouldApplyStreakProtection(nodeId, runState);
   const lastObjectiveType = useStreakProtection ? runState.lastObjectiveType : null;
   const adjustedWeights = useStreakProtection
     ? applyObjectiveStreakProtection(weights, lastObjectiveType)
@@ -319,7 +319,7 @@ function resolveMapId(
     return fallbackMapId;
   }
 
-  const useStreakProtection = shouldApplyStreakProtection(nodeId, runState);
+  const useStreakProtection = runState.mapNoRepeat && shouldApplyStreakProtection(nodeId, runState);
   const mapEntries = useStreakProtection ? applyMapStreakProtection(validEntries, runState.lastMapId) : [...validEntries];
   return weightedMapId(rng, mapEntries, fallbackMapId);
 }
