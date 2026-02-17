@@ -45,6 +45,19 @@ export interface ObjectiveStageEvent {
   progress: number;
 }
 
+export interface AbilityCastEvent {
+  teamId: TeamId;
+  abilityId: string;
+  x: number;
+  y: number;
+}
+
+export interface AbilityAffectedEvent {
+  teamId: TeamId;
+  abilityId: string;
+  squadId: number;
+}
+
 type Listener<T> = (event: T) => void;
 
 export class GameEvents {
@@ -62,6 +75,10 @@ export class GameEvents {
   private readonly gateOpenedPool: GateOpenedEvent[] = [];
   private readonly objectiveStage: ObjectiveStageEvent[] = [];
   private readonly objectiveStagePool: ObjectiveStageEvent[] = [];
+  private readonly abilityCast: AbilityCastEvent[] = [];
+  private readonly abilityCastPool: AbilityCastEvent[] = [];
+  private readonly abilityAffected: AbilityAffectedEvent[] = [];
+  private readonly abilityAffectedPool: AbilityAffectedEvent[] = [];
 
   private readonly orderListeners: Listener<OrderIssuedEvent>[] = [];
   private readonly projectileListeners: Listener<ProjectileFiredEvent>[] = [];
@@ -70,6 +87,8 @@ export class GameEvents {
   private readonly battleEndListeners: Listener<BattleEndEvent>[] = [];
   private readonly gateOpenedListeners: Listener<GateOpenedEvent>[] = [];
   private readonly objectiveStageListeners: Listener<ObjectiveStageEvent>[] = [];
+  private readonly abilityCastListeners: Listener<AbilityCastEvent>[] = [];
+  private readonly abilityAffectedListeners: Listener<AbilityAffectedEvent>[] = [];
 
   private recorder: EventRecorder | null = null;
   private readonly recorderOrderPayload: Record<string, unknown> = {};
@@ -79,6 +98,8 @@ export class GameEvents {
   private readonly recorderBattleEndPayload: Record<string, unknown> = {};
   private readonly recorderGatePayload: Record<string, unknown> = {};
   private readonly recorderObjectiveStagePayload: Record<string, unknown> = {};
+  private readonly recorderAbilityCastPayload: Record<string, unknown> = {};
+  private readonly recorderAbilityAffectedPayload: Record<string, unknown> = {};
 
   beginTick(): void {
     this.recycleOrders();
@@ -88,6 +109,8 @@ export class GameEvents {
     this.recycleSimple(this.battleEnd, this.battleEndPool);
     this.recycleSimple(this.gateOpened, this.gateOpenedPool);
     this.recycleSimple(this.objectiveStage, this.objectiveStagePool);
+    this.recycleSimple(this.abilityCast, this.abilityCastPool);
+    this.recycleSimple(this.abilityAffected, this.abilityAffectedPool);
   }
 
   emitOrderIssued(teamId: TeamId, orderType: OrderMode, squadIds: Iterable<number>): void {
@@ -193,6 +216,36 @@ export class GameEvents {
     }
   }
 
+  emitAbilityCast(teamId: TeamId, abilityId: string, x: number, y: number): void {
+    const event = this.abilityCastPool.pop() ?? { teamId, abilityId, x, y };
+    event.teamId = teamId;
+    event.abilityId = abilityId;
+    event.x = x;
+    event.y = y;
+    this.abilityCast.push(event);
+    if (this.recorder !== null) {
+      this.recorderAbilityCastPayload.teamId = teamId;
+      this.recorderAbilityCastPayload.abilityId = abilityId;
+      this.recorderAbilityCastPayload.x = Math.round(x);
+      this.recorderAbilityCastPayload.y = Math.round(y);
+      this.recorder.record('ABILITY_CAST', this.recorderAbilityCastPayload);
+    }
+  }
+
+  emitAbilityAffected(teamId: TeamId, abilityId: string, squadId: number): void {
+    const event = this.abilityAffectedPool.pop() ?? { teamId, abilityId, squadId };
+    event.teamId = teamId;
+    event.abilityId = abilityId;
+    event.squadId = squadId;
+    this.abilityAffected.push(event);
+    if (this.recorder !== null) {
+      this.recorderAbilityAffectedPayload.teamId = teamId;
+      this.recorderAbilityAffectedPayload.abilityId = abilityId;
+      this.recorderAbilityAffectedPayload.squadId = squadId;
+      this.recorder.record('ABILITY_AFFECTED', this.recorderAbilityAffectedPayload);
+    }
+  }
+
   dispatch(): void {
     this.dispatchList(this.orderIssued, this.orderListeners);
     this.dispatchList(this.projectileFired, this.projectileListeners);
@@ -201,6 +254,8 @@ export class GameEvents {
     this.dispatchList(this.battleEnd, this.battleEndListeners);
     this.dispatchList(this.gateOpened, this.gateOpenedListeners);
     this.dispatchList(this.objectiveStage, this.objectiveStageListeners);
+    this.dispatchList(this.abilityCast, this.abilityCastListeners);
+    this.dispatchList(this.abilityAffected, this.abilityAffectedListeners);
   }
 
   onOrderIssued(listener: Listener<OrderIssuedEvent>): () => void {
@@ -236,6 +291,16 @@ export class GameEvents {
   onObjectiveStage(listener: Listener<ObjectiveStageEvent>): () => void {
     this.objectiveStageListeners.push(listener);
     return () => this.removeListener(this.objectiveStageListeners, listener);
+  }
+
+  onAbilityCast(listener: Listener<AbilityCastEvent>): () => void {
+    this.abilityCastListeners.push(listener);
+    return () => this.removeListener(this.abilityCastListeners, listener);
+  }
+
+  onAbilityAffected(listener: Listener<AbilityAffectedEvent>): () => void {
+    this.abilityAffectedListeners.push(listener);
+    return () => this.removeListener(this.abilityAffectedListeners, listener);
   }
 
   setRecorder(recorder: EventRecorder | null): void {

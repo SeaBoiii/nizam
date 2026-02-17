@@ -1,0 +1,27 @@
+{
+  "version": "abilities_v1",
+  "abilities": [
+    {
+      "id": "rally",
+      "name": "Rally",
+      "desc": "Boost nearby squads' morale and briefly slow morale loss.",
+      "cooldownSec": 72,
+      "castTimeSec": 0.25,
+      "range": 430,
+      "effects": {
+        "moraleAdd": 19,
+        "moraleLossMult": 0.84,
+        "durationSec": 10
+      },
+      "ai": {
+        "useOncePerBattle": true,
+        "triggerMoraleBelow": 0.47,
+        "minAlliesInRange": 2
+      }
+    }
+  ],
+  "startRules": {
+    "dailyDefault": "rally",
+    "normalDefault": "rally"
+  }
+}

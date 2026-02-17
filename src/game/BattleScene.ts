@@ -34,8 +34,10 @@ import type { UnitArchetype } from '../sim/types/UnitArchetype';
 import { createObjectiveForScenario } from '../sim/objectives/createObjective';
 import type { ObjectiveMinimapMarker, ObjectiveSpawnSquadRequest, ObjectiveWorld } from '../sim/objectives/IObjective';
 import { AIDirector } from '../sim/ai/AIDirector';
+import { AbilitySystem } from '../sim/abilities/AbilitySystem';
 import type { CombinedPerkMods } from '../sim/rules/PerkMods';
 import { DEFAULT_PERK_MODS } from '../sim/rules/PerkMods';
+import { AbilityBar } from '../ui/widgets/AbilityBar';
 
 const FIXED_DT = 1 / 60;
 const CLICK_RADIUS_SQ = 42 * 42;
@@ -47,6 +49,7 @@ interface BattleSceneOptions {
   scenario: BattleScenario;
   armyState: ArmyState;
   playerPerkMods: Readonly<CombinedPerkMods>;
+  selectedAbilityId: string;
   settings: GameSettings;
   onEventsReady?: (events: GameEvents) => void;
   onFinished: (result: BattleResult) => void;
@@ -90,6 +93,7 @@ export class BattleScene {
   private readonly terrainLayer = new Container();
   private readonly objectiveLayer = new Container();
   private readonly objectiveGraphics = new Graphics();
+  private readonly abilityGraphics = new Graphics();
   private readonly waypointLayer = new Graphics();
   private readonly trailLayer = new Container();
   private readonly unitLayer = new Container();
@@ -99,6 +103,7 @@ export class BattleScene {
 
   private readonly camera: Camera;
   private readonly hud: Hud;
+  private readonly abilityBar: AbilityBar;
   private readonly objectiveHud: ObjectiveHUD;
   private readonly minimap: Minimap;
   private readonly selectionBox: SelectionBox;
@@ -108,6 +113,7 @@ export class BattleScene {
   private readonly rangedSystem = new RangedSystem();
   private readonly unitGrid = new SpatialHash(32);
   private readonly aiDirector = new AIDirector();
+  private readonly abilitySystem: AbilitySystem;
   private readonly gameEvents = new GameEvents();
   private readonly trailSystem: TrailSystem;
   private readonly hitFlashSystem: HitFlashSystem;
@@ -127,6 +133,7 @@ export class BattleScene {
 
   private readonly pointerScreen = new Vec2();
   private readonly pointerWorld = new Vec2();
+  private readonly abilityCastTarget = new Vec2();
   private readonly dragStartScreen = new Vec2();
   private readonly dragStartWorld = new Vec2();
   private readonly dragEndWorld = new Vec2();
@@ -195,9 +202,14 @@ export class BattleScene {
     this.parent.addChild(this.root);
 
     this.overlayLayer.addChild(this.objectiveGraphics);
+    this.overlayLayer.addChild(this.abilityGraphics);
 
     this.camera = new Camera(this.worldBounds);
     this.hud = new Hud(this.uiLayer);
+    this.abilityBar = new AbilityBar({
+      parent: this.uiLayer,
+      onCast: () => this.commandRally(),
+    });
     this.objectiveHud = new ObjectiveHUD(this.uiLayer);
     this.minimap = new Minimap(this.uiLayer, this.worldBounds);
     this.selectionBox = new SelectionBox(this.uiLayer);
@@ -211,6 +223,11 @@ export class BattleScene {
     this.trailSystem = new TrailSystem(this.trailLayer);
     this.hitFlashSystem = new HitFlashSystem(this.overlayLayer);
     this.routBurstSystem = new RoutBurstSystem(this.overlayLayer);
+    this.abilitySystem = new AbilitySystem({
+      squads: this.squads,
+      events: this.gameEvents,
+      selectedAbilityId: options.selectedAbilityId,
+    });
     this.bindEventChannels();
     if (options.onEventsReady) {
       options.onEventsReady(this.gameEvents);
@@ -246,6 +263,7 @@ export class BattleScene {
     this.camera.applyTo(this.worldLayer);
     this.minimap.resize(this.app.screen.width, this.app.screen.height);
     this.aiDirector.setOrderFrequencyMultiplier(this.scenario.enemyAIFrequencyMult);
+    this.aiDirector.resetBattle();
     this.applySettings(options.settings);
 
     this.spawnTeams();
@@ -258,6 +276,7 @@ export class BattleScene {
 
   destroy(): void {
     this.unbindInput();
+    this.abilitySystem.destroy();
 
     for (let i = 0; i < this.squads.length; i += 1) {
       this.squads[i].destroy();
@@ -570,6 +589,13 @@ export class BattleScene {
         this.commandCharge();
         break;
       case 'KeyR':
+        if (event.shiftKey) {
+          this.commandRetreat();
+        } else {
+          this.commandRally();
+        }
+        break;
+      case 'KeyT':
         this.commandRetreat();
         break;
       case 'KeyV':
@@ -746,6 +772,16 @@ export class BattleScene {
     this.lastOrderMode = 'RETREAT';
   }
 
+  private commandRally(): void {
+    this.getAbilityCastTarget(this.abilityCastTarget);
+    if (!this.abilitySystem.cast(TeamId.Blue, this.abilityCastTarget)) {
+      const cooldown = this.abilitySystem.getCooldownRemaining(TeamId.Blue);
+      this.lastOrderMode = cooldown > 0 ? `RALLY CD ${cooldown.toFixed(1)}s` : 'RALLY UNAVAILABLE';
+      return;
+    }
+    this.lastOrderMode = 'RALLY';
+  }
+
   private commandVolley(): void {
     if (this.selectedSquads.size === 0) {
       return;
@@ -848,6 +884,7 @@ export class BattleScene {
     this.gameEvents.beginTick();
     this.syncNavToMapState();
     this.simTime += dt;
+    this.abilitySystem.update(dt);
     this.updateCameraPan(dt);
     this.objectiveWorld.simTime = this.simTime;
 
@@ -892,6 +929,7 @@ export class BattleScene {
       objective: this.objectiveManager.getTacticalState(),
       mapState: this.battleMap,
       navGrid: this.navGrid,
+      abilitySystem: this.abilitySystem,
     });
 
     const playerRemaining = this.countTeamAlive(TeamId.Blue);
@@ -1041,6 +1079,7 @@ export class BattleScene {
     this.mapOverlay.draw(this.battleMap);
     this.camera.applyTo(this.worldLayer);
     this.objectiveManager.renderOverlay(this.objectiveGraphics, this.camera);
+    this.abilitySystem.renderOverlay(this.abilityGraphics);
     this.drawWaypointPaths();
     this.squadIndicators.update(this.squads);
 
@@ -1053,6 +1092,15 @@ export class BattleScene {
     });
 
     this.objectiveHud.update(this.objectiveManager.getHUDState());
+
+    const ability = this.abilitySystem.getAbility(TeamId.Blue);
+    this.abilityBar.update({
+      abilityName: ability ? ability.name : '-',
+      cooldownRemaining: this.abilitySystem.getCooldownRemaining(TeamId.Blue),
+      cooldownDuration: this.abilitySystem.getCooldownDuration(TeamId.Blue),
+      canCast: this.abilitySystem.canCast(TeamId.Blue),
+    });
+    this.abilityBar.layout(this.app.screen.width, this.app.screen.height);
 
     this.objectiveManager.getMinimapMarkers(this.minimapMarkers);
     if (this.showMinimap) {
@@ -1195,12 +1243,30 @@ export class BattleScene {
     this.gameEvents.onGateOpened(() => {
       audioManager.play('horn_charge', 0.85, 300);
     });
+    this.gameEvents.onAbilityCast(() => {
+      audioManager.play('horn_charge', 0.8, 180);
+    });
   }
 
   private toCanvasPoint(clientX: number, clientY: number, out: Vec2): Vec2 {
     const rect = this.app.canvas.getBoundingClientRect();
     out.x = clientX - rect.left;
     out.y = clientY - rect.top;
+    return out;
+  }
+
+  private getAbilityCastTarget(out: Vec2): Vec2 {
+    let selected: Squad | null = null;
+    for (const squad of this.selectedSquads) {
+      if (selected === null || squad.id < selected.id) {
+        selected = squad;
+      }
+    }
+    if (selected !== null) {
+      out.copy(selected.anchor);
+      return out;
+    }
+    out.copy(this.camera.position);
     return out;
   }
 

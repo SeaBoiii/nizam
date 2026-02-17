@@ -44,6 +44,7 @@ export class BattleState implements IGameState {
       scenario,
       armyState: campaign.armyState,
       playerPerkMods: getCombinedPerkMods(campaign.perkState.pickedPerkIds),
+      selectedAbilityId: campaign.runState.selectedAbilityId,
       settings: this.currentSettings,
       onEventsReady: (events) => {
         if (this.unbindTelemetry !== null) {

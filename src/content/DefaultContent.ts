@@ -1,4 +1,5 @@
 import type {
+  AbilitiesContent,
   MapsContent,
   NodesTuningContent,
   ObjectivesTuningContent,
@@ -462,6 +463,34 @@ export const DEFAULT_PERKS_CONTENT: PerksContent = {
       },
     },
   ],
+};
+
+export const DEFAULT_ABILITIES_CONTENT: AbilitiesContent = {
+  version: 'abilities_v1',
+  abilities: [
+    {
+      id: 'rally',
+      name: 'Rally',
+      desc: "Boost nearby squads' morale and briefly slow morale loss.",
+      cooldownSec: 75,
+      castTimeSec: 0.25,
+      range: 420,
+      effects: {
+        moraleAdd: 18,
+        moraleLossMult: 0.85,
+        durationSec: 10,
+      },
+      ai: {
+        useOncePerBattle: true,
+        triggerMoraleBelow: 0.45,
+        minAlliesInRange: 2,
+      },
+    },
+  ],
+  startRules: {
+    dailyDefault: 'rally',
+    normalDefault: 'rally',
+  },
 };
 
 export const DEFAULT_OBJECTIVES_CONTENT: ObjectivesTuningContent = {

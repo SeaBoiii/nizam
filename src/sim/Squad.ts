@@ -88,6 +88,8 @@ export class Squad {
   private suppressionWindowTimer = 0;
   private suppressionAppliedThisWindow = 0;
   private suppressedTimer = 0;
+  private abilityMoraleLossMult = 1;
+  private rallyTimer = 0;
 
   private readonly slotTemp = new Vec2();
   private readonly worldSlotTemp = new Vec2();
@@ -260,6 +262,7 @@ export class Squad {
       return;
     }
     this.tickSuppression(context.dt);
+    this.tickRally(context.dt);
 
     const usesMorale = !this.archetype.tags.includes('caravan');
     if (usesMorale) {
@@ -292,7 +295,7 @@ export class Squad {
 
   private updateMorale(context: SquadUpdateContext): void {
     const moraleRegenMult = Math.max(0.1, this.perkMods.moraleRegenMult);
-    const moraleLossMult = Math.max(0.1, this.perkMods.moraleLossMult);
+    const moraleLossMult = Math.max(0.1, this.perkMods.moraleLossMult * this.abilityMoraleLossMult);
 
     const alive = this.aliveCount();
     this.casualties = this.initialSize - alive;
@@ -793,8 +796,23 @@ export class Squad {
     this.label.alpha = this.isSelected ? 1 : 0.76;
     this.label.text = `S${this.id} ${this.archetype.name} ${Math.round(this.morale)}%${
       this.isSuppressed() ? ' SUPPRESSED' : ''
-    }`;
+    }${this.isRallyActive() ? ' RALLY' : ''}`;
     this.label.position.set(this.anchor.x, this.anchor.y - radius - 8);
+  }
+
+  applyMoraleBoost(amount: number): void {
+    if (this.archetype.tags.includes('caravan')) {
+      return;
+    }
+    this.morale = clamp(this.morale + Math.max(0, amount), 0, 100);
+  }
+
+  setAbilityMoraleLossMult(mult: number): void {
+    this.abilityMoraleLossMult = clamp(mult, 0.1, 2.5);
+  }
+
+  showRallyIndicator(durationSec: number): void {
+    this.rallyTimer = Math.max(this.rallyTimer, Math.max(0, durationSec));
   }
 
   applySuppression(amount: number, maxPerSecond: number): number {
@@ -826,6 +844,14 @@ export class Squad {
       this.suppressionAppliedThisWindow = 0;
     }
     this.suppressedTimer = Math.max(0, this.suppressedTimer - dt);
+  }
+
+  private tickRally(dt: number): void {
+    this.rallyTimer = Math.max(0, this.rallyTimer - dt);
+  }
+
+  private isRallyActive(): boolean {
+    return this.rallyTimer > 0;
   }
 
   private perkedMoveSpeed(baseSpeed: number): number {

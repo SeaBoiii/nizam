@@ -75,6 +75,25 @@ function asRunMode(value: unknown): RunMode {
   return 'NORMAL';
 }
 
+function resolveSelectedAbilityId(value: unknown, mode: RunMode): string {
+  const rules = contentManager.getStartAbilityRules();
+  const fallback = mode === 'DAILY' ? rules.dailyDefault : rules.normalDefault;
+  const requested = typeof value === 'string' && value.trim().length > 0 ? value.trim() : fallback;
+  if (contentManager.getAbility(requested) !== null) {
+    return requested;
+  }
+  if (contentManager.getAbility(fallback) !== null) {
+    if (requested !== fallback) {
+      console.warn(`[Save] Missing ability '${requested}' in content. Replaced with '${fallback}'.`);
+    }
+    return fallback;
+  }
+  if (requested !== 'rally') {
+    console.warn(`[Save] Missing ability '${requested}' in content. Falling back to 'rally'.`);
+  }
+  return 'rally';
+}
+
 function sanitizeChallengePayloadSummary(value: unknown): RunState['challengePayload'] {
   if (!isObject(value)) {
     return null;
@@ -148,6 +167,7 @@ function sanitizeRunState(value: unknown): RunState | null {
     mode,
     dateKey: asNullableString(value.dateKey),
     packIdLocked: asNullableString(value.packIdLocked),
+    selectedAbilityId: resolveSelectedAbilityId(value.selectedAbilityId, mode),
     currentNodeId,
     clearedNodeIds,
     step: Math.max(0, Math.floor(asNumber(value.step, 0))),
@@ -323,6 +343,7 @@ function migrateRunState(runState: RunState, mapState: MapState): RunState {
     mode: runState.mode ?? 'NORMAL',
     dateKey: runState.dateKey ?? null,
     packIdLocked: runState.packIdLocked ?? null,
+    selectedAbilityId: resolveSelectedAbilityId(runState.selectedAbilityId, runState.mode ?? 'NORMAL'),
     difficultyMode: runState.difficultyMode ?? DifficultyMode.NORMAL,
     battleNodesCleared,
     lastRewardedNodeId: runState.lastRewardedNodeId ?? '',

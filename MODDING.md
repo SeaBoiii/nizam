@@ -34,6 +34,7 @@ If pack validation fails, the game falls back to `base` and shows warnings.
 - `scenarios.json`
 - `maps.json`
 - `perks.json`
+- `abilities.json`
 
 ## Example tweaks
 

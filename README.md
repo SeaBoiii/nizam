@@ -74,6 +74,7 @@ Default pack files now live in:
 - `public/mods/base/units.json`
 - `public/mods/base/upgrades.json`
 - `public/mods/base/perks.json`
+- `public/mods/base/abilities.json`
 - `public/mods/base/objectives.json`
 - `public/mods/base/nodes.json`
 - `public/mods/base/scenarios.json`
@@ -157,7 +158,8 @@ If a selected pack is missing/invalid, the loader falls back to `base`. If `base
 - Battle formation line/column/wedge/loose: `1`, `2`, `3`, `4`
 - Battle hold: `H`
 - Battle charge nearest enemy: `C`
-- Battle retreat to map edge: `R`
+- Battle commander ability (Rally): `R` (or click Ability Bar)
+- Battle retreat to map edge: `T` (or `Shift+R`)
 - Battle volley (ranged stance): `V`
 - Battle skirmish (kite while shooting): `K`
 - Rewards: when a perk offer appears, click one perk card to continue
@@ -378,6 +380,7 @@ Required files per pack:
 - `scenarios.json`
 - `maps.json`
 - `perks.json`
+- `abilities.json`
 
 ## Ranged combat (Sprint 2)
 
@@ -398,6 +401,18 @@ Required files per pack:
   - `stoneMoraleDamageOnShieldFrontMult`
   - `maxSuppressionPerSecondPerSquad`
 - Mid/late enemy templates now include slingers via `public/mods/base/scenarios.json`.
+
+## Commander Ability (Sprint 19.1)
+
+- Added data-driven commander abilities in:
+  - `public/mods/base/abilities.json`
+  - `public/mods/community/abilities.json`
+- Initial ability: `Rally`
+  - casts at selected squad anchor (or camera center if nothing is selected)
+  - instantly boosts nearby allied squad morale
+  - applies a temporary morale-loss reduction buff
+  - uses cooldown + cast time
+- Enemy AI can cast Rally once per battle when nearby allied morale is low.
 
 ## Overworld node types
 

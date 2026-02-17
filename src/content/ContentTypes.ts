@@ -86,6 +86,40 @@ export interface PerksContent {
   rewardRules: PerkRewardRulesContent;
 }
 
+export interface AbilityEffectsContent {
+  moraleAdd: number;
+  moraleLossMult: number;
+  durationSec: number;
+}
+
+export interface AbilityAIContent {
+  useOncePerBattle: boolean;
+  triggerMoraleBelow: number;
+  minAlliesInRange: number;
+}
+
+export interface AbilityContent {
+  id: string;
+  name: string;
+  desc: string;
+  cooldownSec: number;
+  castTimeSec: number;
+  range: number;
+  effects: AbilityEffectsContent;
+  ai: AbilityAIContent;
+}
+
+export interface AbilityStartRulesContent {
+  dailyDefault: string;
+  normalDefault: string;
+}
+
+export interface AbilitiesContent {
+  version: string;
+  abilities: AbilityContent[];
+  startRules: AbilityStartRulesContent;
+}
+
 export interface ObjectiveSelectionWeights {
   CAPTURE: number;
   ASSASSINATE: number;
@@ -336,6 +370,7 @@ export interface LoadedContent {
   units: UnitsContent;
   upgrades: UpgradePathsContent;
   perks: PerksContent;
+  abilities: AbilitiesContent;
   objectives: ObjectivesTuningContent;
   nodes: NodesTuningContent;
   scenarios: ScenariosContent;
@@ -359,6 +394,7 @@ export interface ContentVersions {
   unitsVersion?: string;
   upgradesVersion?: string;
   perksVersion?: string;
+  abilitiesVersion?: string;
   objectivesVersion?: string;
   nodesVersion?: string;
   scenariosVersion?: string;

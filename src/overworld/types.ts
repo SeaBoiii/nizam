@@ -48,6 +48,7 @@ export interface RunState {
   mode: RunMode;
   dateKey: string | null;
   packIdLocked: string | null;
+  selectedAbilityId: string;
   currentNodeId: string;
   clearedNodeIds: string[];
   step: number;

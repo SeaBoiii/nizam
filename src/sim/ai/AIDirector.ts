@@ -1,4 +1,5 @@
 import { Vec2 } from '../../utils/vec2';
+import { AbilitySystem } from '../abilities/AbilitySystem';
 import { BattleMapState } from '../map/MapState';
 import { NavGrid } from '../nav/NavGrid';
 import { TeamId, type WorldBounds } from '../types';
@@ -16,6 +17,7 @@ import {
 } from './Tactics';
 
 const BASE_AI_ORDER_INTERVAL = 1;
+const ABILITY_EVAL_INTERVAL = 2;
 const CLOSE_TO_POINT_SQ = 70 * 70;
 
 interface AIDirectorContext {
@@ -24,11 +26,14 @@ interface AIDirectorContext {
   objective: ObjectiveTacticalState;
   mapState: BattleMapState;
   navGrid: NavGrid;
+  abilitySystem: AbilitySystem;
 }
 
 export class AIDirector {
   private decisionTimer = 0;
+  private abilityDecisionTimer = 0;
   private orderFrequencyMult = 1;
+  private enemyRallyUsed = false;
 
   private readonly enemySquads: Squad[] = [];
   private readonly playerSquads: Squad[] = [];
@@ -37,19 +42,34 @@ export class AIDirector {
   private readonly protectPoint = new Vec2();
   private readonly hillPoint = new Vec2();
   private readonly siegeTargetPoint = new Vec2();
+  private readonly abilityCenterPoint = new Vec2();
   private readonly commandMemory = new Map<number, string>();
 
   update(dt: number, context: AIDirectorContext): void {
     this.decisionTimer -= dt;
-    if (this.decisionTimer > 0) {
+    this.abilityDecisionTimer -= dt;
+    const shouldIssueOrders = this.decisionTimer <= 0;
+    const shouldEvalAbilities = this.abilityDecisionTimer <= 0;
+    if (!shouldIssueOrders && !shouldEvalAbilities) {
       return;
     }
-    this.decisionTimer = BASE_AI_ORDER_INTERVAL / this.orderFrequencyMult;
+    if (shouldIssueOrders) {
+      this.decisionTimer = BASE_AI_ORDER_INTERVAL / this.orderFrequencyMult;
+    }
+    if (shouldEvalAbilities) {
+      this.abilityDecisionTimer = ABILITY_EVAL_INTERVAL;
+    }
 
     livingTeamSquads(context.squads, TeamId.Red, this.enemySquads);
     livingTeamSquads(context.squads, TeamId.Blue, this.playerSquads);
 
     if (this.enemySquads.length === 0 || this.playerSquads.length === 0) {
+      return;
+    }
+    if (shouldEvalAbilities) {
+      this.tryCastRally(context);
+    }
+    if (!shouldIssueOrders) {
       return;
     }
 
@@ -95,6 +115,13 @@ export class AIDirector {
         this.commandMove(squad, routingEnemy.anchor, null);
       }
     }
+  }
+
+  resetBattle(): void {
+    this.decisionTimer = 0;
+    this.abilityDecisionTimer = 0;
+    this.enemyRallyUsed = false;
+    this.commandMemory.clear();
   }
 
   private pickAssassinSquad(): Squad | null {
@@ -608,5 +635,98 @@ export class AIDirector {
 
   setOrderFrequencyMultiplier(multiplier: number): void {
     this.orderFrequencyMult = Math.max(0.5, Math.min(2.5, multiplier));
+  }
+
+  private tryCastRally(context: AIDirectorContext): void {
+    const ability = context.abilitySystem.getAbility(TeamId.Red);
+    if (ability === null || ability.id !== 'rally') {
+      return;
+    }
+    if (ability.ai.useOncePerBattle && this.enemyRallyUsed) {
+      return;
+    }
+    if (!context.abilitySystem.canCast(TeamId.Red)) {
+      return;
+    }
+
+    const moraleThreshold = Math.max(0, Math.min(1, ability.ai.triggerMoraleBelow)) * 100;
+    const minAllies = Math.max(1, Math.floor(ability.ai.minAlliesInRange));
+    const rangeSq = ability.range * ability.range;
+    const objectivePos = context.objective.focusPosition;
+
+    let found = false;
+    let bestAvgMorale = Number.POSITIVE_INFINITY;
+    let bestCount = -1;
+    let bestObjectiveDistSq = Number.POSITIVE_INFINITY;
+    let bestCenterSquadId = Number.POSITIVE_INFINITY;
+    let bestCenterX = 0;
+    let bestCenterY = 0;
+
+    for (let i = 0; i < this.enemySquads.length; i += 1) {
+      const center = this.enemySquads[i];
+      if (!center.hasLivingSoldiers()) {
+        continue;
+      }
+
+      let allyCount = 0;
+      let moraleSum = 0;
+      let sumX = 0;
+      let sumY = 0;
+      for (let j = 0; j < this.enemySquads.length; j += 1) {
+        const ally = this.enemySquads[j];
+        if (!ally.hasLivingSoldiers()) {
+          continue;
+        }
+        if (distanceSq(center.anchor, ally.anchor) > rangeSq) {
+          continue;
+        }
+        allyCount += 1;
+        moraleSum += ally.morale;
+        sumX += ally.anchor.x;
+        sumY += ally.anchor.y;
+      }
+
+      if (allyCount < minAllies) {
+        continue;
+      }
+      const avgMorale = moraleSum / allyCount;
+      if (avgMorale > moraleThreshold) {
+        continue;
+      }
+
+      const centerX = sumX / allyCount;
+      const centerY = sumY / allyCount;
+      const dx = centerX - objectivePos.x;
+      const dy = centerY - objectivePos.y;
+      const objectiveDistSq = dx * dx + dy * dy;
+
+      const betterMorale = avgMorale < bestAvgMorale - 0.001;
+      const sameMorale = Math.abs(avgMorale - bestAvgMorale) <= 0.001;
+      const betterCount = allyCount > bestCount;
+      const betterObjectiveDist = objectiveDistSq < bestObjectiveDistSq - 0.001;
+      const betterId = center.id < bestCenterSquadId;
+      if (
+        !found ||
+        betterMorale ||
+        (sameMorale && (betterCount || (allyCount === bestCount && (betterObjectiveDist || (objectiveDistSq === bestObjectiveDistSq && betterId)))))
+      ) {
+        found = true;
+        bestAvgMorale = avgMorale;
+        bestCount = allyCount;
+        bestObjectiveDistSq = objectiveDistSq;
+        bestCenterSquadId = center.id;
+        bestCenterX = centerX;
+        bestCenterY = centerY;
+      }
+    }
+
+    if (!found) {
+      return;
+    }
+
+    this.abilityCenterPoint.set(bestCenterX, bestCenterY);
+    if (context.abilitySystem.cast(TeamId.Red, this.abilityCenterPoint) && ability.ai.useOncePerBattle) {
+      this.enemyRallyUsed = true;
+    }
   }
 }

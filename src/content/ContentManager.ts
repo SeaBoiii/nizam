@@ -1,4 +1,7 @@
-﻿import type {
+import type {
+  AbilityContent,
+  AbilityStartRulesContent,
+  AbilitiesContent,
   BattleMapContent,
   ContentFileName,
   ContentPackLoadResult,
@@ -21,6 +24,7 @@
   UpgradePathsContent,
 } from './ContentTypes';
 import {
+  DEFAULT_ABILITIES_CONTENT,
   DEFAULT_NODES_CONTENT,
   DEFAULT_OBJECTIVES_CONTENT,
   DEFAULT_PERKS_CONTENT,
@@ -335,6 +339,7 @@ const DEFAULT_CONTENT: LoadedContent = {
   units: cloneUnitsContent(DEFAULT_UNITS_CONTENT),
   upgrades: cloneUpgradesContent(DEFAULT_UPGRADES_CONTENT),
   perks: clonePerksContent(DEFAULT_PERKS_CONTENT),
+  abilities: cloneAbilitiesContent(DEFAULT_ABILITIES_CONTENT),
   objectives: cloneObjectivesContent(DEFAULT_OBJECTIVES_CONTENT),
   nodes: cloneNodesContent(DEFAULT_NODES_CONTENT),
   scenarios: cloneScenariosContent(DEFAULT_SCENARIOS_CONTENT),
@@ -346,6 +351,7 @@ function cloneLoadedContent(content: LoadedContent): LoadedContent {
     units: cloneUnitsContent(content.units),
     upgrades: cloneUpgradesContent(content.upgrades),
     perks: clonePerksContent(content.perks),
+    abilities: cloneAbilitiesContent(content.abilities),
     objectives: cloneObjectivesContent(content.objectives),
     nodes: cloneNodesContent(content.nodes),
     scenarios: cloneScenariosContent(content.scenarios),
@@ -972,6 +978,67 @@ function isValidMapsContent(value: unknown): value is MapsContent {
   return true;
 }
 
+function isValidAbilityContent(value: unknown): value is AbilityContent {
+  const candidate = asObject(value);
+  if (!candidate) {
+    return false;
+  }
+  if (
+    typeof candidate.id !== 'string' ||
+    typeof candidate.name !== 'string' ||
+    typeof candidate.desc !== 'string' ||
+    !isFiniteNumber(candidate.cooldownSec) ||
+    !isFiniteNumber(candidate.castTimeSec) ||
+    !isFiniteNumber(candidate.range)
+  ) {
+    return false;
+  }
+  const effects = asObject(candidate.effects);
+  const ai = asObject(candidate.ai);
+  if (!effects || !ai) {
+    return false;
+  }
+  if (
+    !isFiniteNumber(effects.moraleAdd) ||
+    !isFiniteNumber(effects.moraleLossMult) ||
+    !isFiniteNumber(effects.durationSec)
+  ) {
+    return false;
+  }
+  if (
+    typeof ai.useOncePerBattle !== 'boolean' ||
+    !isFiniteNumber(ai.triggerMoraleBelow) ||
+    !isFiniteNumber(ai.minAlliesInRange)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function isValidAbilitiesContent(value: unknown): value is AbilitiesContent {
+  const candidate = asObject(value);
+  if (!candidate || typeof candidate.version !== 'string' || !Array.isArray(candidate.abilities)) {
+    return false;
+  }
+  const startRules = asObject(candidate.startRules);
+  if (
+    !startRules ||
+    typeof startRules.dailyDefault !== 'string' ||
+    typeof startRules.normalDefault !== 'string'
+  ) {
+    return false;
+  }
+  if (candidate.abilities.length === 0) {
+    return false;
+  }
+  for (let i = 0; i < candidate.abilities.length; i += 1) {
+    if (!isValidAbilityContent(candidate.abilities[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
 type Validator<T> = (value: unknown) => value is T;
 
 const DEFAULT_PACKS: ContentPacksManifest = {
@@ -984,10 +1051,39 @@ function cloneSourceByFile(source: 'json' | 'default'): ContentLoadStatus['sourc
     units: source,
     upgrades: source,
     perks: source,
+    abilities: source,
     objectives: source,
     nodes: source,
     scenarios: source,
     maps: source,
+  };
+}
+
+function cloneAbilitiesContent(content: AbilitiesContent): AbilitiesContent {
+  return {
+    version: content.version,
+    abilities: content.abilities.map((ability) => ({
+      id: ability.id,
+      name: ability.name,
+      desc: ability.desc,
+      cooldownSec: ability.cooldownSec,
+      castTimeSec: ability.castTimeSec,
+      range: ability.range,
+      effects: {
+        moraleAdd: ability.effects.moraleAdd,
+        moraleLossMult: ability.effects.moraleLossMult,
+        durationSec: ability.effects.durationSec,
+      },
+      ai: {
+        useOncePerBattle: ability.ai.useOncePerBattle,
+        triggerMoraleBelow: ability.ai.triggerMoraleBelow,
+        minAlliesInRange: ability.ai.minAlliesInRange,
+      },
+    })),
+    startRules: {
+      dailyDefault: content.startRules.dailyDefault,
+      normalDefault: content.startRules.normalDefault,
+    },
   };
 }
 
@@ -1031,6 +1127,7 @@ function resolveVersions(content: LoadedContent): ContentVersions {
     unitsVersion: content.units.contentVersion,
     upgradesVersion: content.upgrades.contentVersion,
     perksVersion: content.perks.version,
+    abilitiesVersion: content.abilities.version,
     objectivesVersion: content.objectives.contentVersion,
     nodesVersion: content.nodes.contentVersion,
     scenariosVersion: content.scenarios.contentVersion,
@@ -1045,8 +1142,12 @@ function cloneVersions(versions: ContentVersions): ContentVersions {
 function validateCrossReferences(content: LoadedContent): string[] {
   const errors: string[] = [];
   const unitIds = new Set<string>();
+  const abilityIds = new Set<string>();
   for (let i = 0; i < content.units.units.length; i += 1) {
     unitIds.add(content.units.units[i].id);
+  }
+  for (let i = 0; i < content.abilities.abilities.length; i += 1) {
+    abilityIds.add(content.abilities.abilities[i].id);
   }
   const mapIds = new Set<string>();
   for (let i = 0; i < content.maps.maps.length; i += 1) {
@@ -1055,6 +1156,12 @@ function validateCrossReferences(content: LoadedContent): string[] {
 
   if (!unitIds.has(content.units.fallbackArchetypeId)) {
     errors.push(`fallbackArchetypeId '${content.units.fallbackArchetypeId}' is missing in units.json.`);
+  }
+  if (!abilityIds.has(content.abilities.startRules.dailyDefault)) {
+    errors.push(`abilities.startRules.dailyDefault '${content.abilities.startRules.dailyDefault}' is missing in abilities.json.`);
+  }
+  if (!abilityIds.has(content.abilities.startRules.normalDefault)) {
+    errors.push(`abilities.startRules.normalDefault '${content.abilities.startRules.normalDefault}' is missing in abilities.json.`);
   }
 
   for (let i = 0; i < content.units.startingArmy.squads.length; i += 1) {
@@ -1401,6 +1508,40 @@ export class ContentManager {
     };
   }
 
+  getAbility(abilityId: string): AbilityContent | null {
+    for (let i = 0; i < this.content.abilities.abilities.length; i += 1) {
+      const ability = this.content.abilities.abilities[i];
+      if (ability.id === abilityId) {
+        return {
+          id: ability.id,
+          name: ability.name,
+          desc: ability.desc,
+          cooldownSec: ability.cooldownSec,
+          castTimeSec: ability.castTimeSec,
+          range: ability.range,
+          effects: {
+            moraleAdd: ability.effects.moraleAdd,
+            moraleLossMult: ability.effects.moraleLossMult,
+            durationSec: ability.effects.durationSec,
+          },
+          ai: {
+            useOncePerBattle: ability.ai.useOncePerBattle,
+            triggerMoraleBelow: ability.ai.triggerMoraleBelow,
+            minAlliesInRange: ability.ai.minAlliesInRange,
+          },
+        };
+      }
+    }
+    return null;
+  }
+
+  getStartAbilityRules(): AbilityStartRulesContent {
+    return {
+      dailyDefault: this.content.abilities.startRules.dailyDefault,
+      normalDefault: this.content.abilities.startRules.normalDefault,
+    };
+  }
+
   getObjectiveTuning(): ObjectivesTuningContent {
     return cloneObjectivesContent(this.content.objectives);
   }
@@ -1453,6 +1594,7 @@ export class ContentManager {
       this.content.units.contentVersion ||
       this.content.upgrades.contentVersion ||
       this.content.perks.version ||
+      this.content.abilities.version ||
       this.content.objectives.contentVersion ||
       this.content.nodes.contentVersion ||
       this.content.scenarios.contentVersion ||
@@ -1555,12 +1697,13 @@ export class ContentManager {
     const units = await this.loadFileFromPack('units', isValidUnitsContent, packId, forceReload, errors);
     const upgrades = await this.loadFileFromPack('upgrades', isValidUpgradesContent, packId, forceReload, errors);
     const perks = await this.loadFileFromPack('perks', isValidPerksContent, packId, forceReload, errors);
+    const abilities = await this.loadFileFromPack('abilities', isValidAbilitiesContent, packId, forceReload, errors);
     const objectives = await this.loadFileFromPack('objectives', isValidObjectivesContent, packId, forceReload, errors);
     const nodes = await this.loadFileFromPack('nodes', isValidNodesContent, packId, forceReload, errors);
     const scenarios = await this.loadFileFromPack('scenarios', isValidScenariosContent, packId, forceReload, errors);
     const maps = await this.loadFileFromPack('maps', isValidMapsContent, packId, forceReload, errors);
 
-    if (units === null || upgrades === null || perks === null || objectives === null || nodes === null || scenarios === null || maps === null) {
+    if (units === null || upgrades === null || perks === null || abilities === null || objectives === null || nodes === null || scenarios === null || maps === null) {
       return {
         ok: false,
         content: null,
@@ -1572,6 +1715,7 @@ export class ContentManager {
       units,
       upgrades,
       perks,
+      abilities,
       objectives,
       nodes,
       scenarios,
@@ -1631,3 +1775,5 @@ export class ContentManager {
 }
 
 export const contentManager = new ContentManager();
+
+

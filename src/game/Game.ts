@@ -266,11 +266,13 @@ export class Game {
     const seed = (Date.now() ^ (Math.random() * 0xffffffff)) >>> 0;
     const mapState = generateMap(seed);
 
+    const startAbilityRules = contentManager.getStartAbilityRules();
     const runState: RunState = {
       seed,
       mode: 'NORMAL',
       dateKey: null,
       packIdLocked: null,
+      selectedAbilityId: startAbilityRules.normalDefault,
       currentNodeId: mapState.startNodeId,
       clearedNodeIds: [mapState.startNodeId],
       step: 0,
@@ -329,11 +331,13 @@ export class Game {
 
     const seed = daily.seed >>> 0;
     const mapState = generateMap(seed);
+    const startAbilityRules = contentManager.getStartAbilityRules();
     const runState: RunState = {
       seed,
       mode: 'DAILY',
       dateKey: daily.dateKey,
       packIdLocked: 'base',
+      selectedAbilityId: startAbilityRules.dailyDefault,
       currentNodeId: mapState.startNodeId,
       clearedNodeIds: [mapState.startNodeId],
       step: 0,
@@ -430,11 +434,13 @@ export class Game {
     const objectiveNoRepeat = payload.rules?.objectiveNoRepeat ?? true;
     const mapNoRepeat = payload.rules?.mapNoRepeat ?? true;
 
+    const startAbilityRules = contentManager.getStartAbilityRules();
     const runState: RunState = {
       seed,
       mode: 'CHALLENGE',
       dateKey: payload.dateKey ?? null,
       packIdLocked: payload.pack.id,
+      selectedAbilityId: startAbilityRules.normalDefault,
       currentNodeId: mapState.startNodeId,
       clearedNodeIds: [mapState.startNodeId],
       step: 0,
