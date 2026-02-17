@@ -5,6 +5,7 @@ import type { Squad } from './Squad';
 import type { TeamId } from './types';
 
 export const SOLDIER_RADIUS = 4;
+const SPRITE_RADIUS = SOLDIER_RADIUS + 0.95;
 
 export type ChargeState = 'none' | 'charging' | 'cooldown';
 
@@ -16,6 +17,85 @@ interface SoldierOptions {
   color: number;
   initialPosition: Vec2;
   archetype: UnitArchetype;
+}
+
+function tintColor(color: number, mult: number): number {
+  const r = Math.max(0, Math.min(255, Math.round(((color >> 16) & 0xff) * mult)));
+  const g = Math.max(0, Math.min(255, Math.round(((color >> 8) & 0xff) * mult)));
+  const b = Math.max(0, Math.min(255, Math.round((color & 0xff) * mult)));
+  return (r << 16) | (g << 8) | b;
+}
+
+function drawGlyph(sprite: Graphics, tags: ReadonlySet<UnitTag>, teamColor: number): void {
+  const bodyColor = tintColor(teamColor, 1.02);
+  const borderColor = tintColor(teamColor, 0.56);
+  const accentColor = tags.has('heavy') ? 0xf4d7a0 : 0xe4f1ff;
+  const supportColor = tintColor(teamColor, 1.2);
+
+  sprite.clear();
+
+  sprite.circle(0, 0, SPRITE_RADIUS + 0.65);
+  sprite.fill({ color: 0x000000, alpha: 0.28 });
+  sprite.circle(0, 0, SPRITE_RADIUS);
+  sprite.fill({ color: bodyColor, alpha: 0.98 });
+  sprite.circle(0, 0, SPRITE_RADIUS);
+  sprite.stroke({ color: borderColor, alpha: 0.95, width: 1.2 });
+
+  if (tags.has('cavalry')) {
+    sprite.moveTo(-2.7, 0);
+    sprite.lineTo(-1, -2.5);
+    sprite.lineTo(2.8, -0.8);
+    sprite.lineTo(2.5, 1.2);
+    sprite.lineTo(-1.2, 2.5);
+    sprite.closePath();
+    sprite.fill({ color: accentColor, alpha: 0.78 });
+  } else if (tags.has('archer')) {
+    sprite.moveTo(-2.8, -2.7);
+    sprite.lineTo(-4.1, 0);
+    sprite.lineTo(-2.8, 2.7);
+    sprite.stroke({ color: accentColor, alpha: 0.9, width: 1.15 });
+
+    sprite.moveTo(-1.1, -0.2);
+    sprite.lineTo(3.1, -0.2);
+    sprite.stroke({ color: accentColor, alpha: 0.9, width: 1.15 });
+    sprite.moveTo(3.1, -0.2);
+    sprite.lineTo(1.9, -1.2);
+    sprite.lineTo(1.9, 0.8);
+    sprite.closePath();
+    sprite.fill({ color: accentColor, alpha: 0.9 });
+  } else if (tags.has('slinger')) {
+    sprite.circle(-0.6, 0, 2.25);
+    sprite.stroke({ color: accentColor, alpha: 0.9, width: 1.2 });
+    sprite.circle(2.3, 0, 1.05);
+    sprite.fill({ color: supportColor, alpha: 0.84 });
+  } else if (tags.has('spear')) {
+    sprite.moveTo(-3.2, 0);
+    sprite.lineTo(2.7, 0);
+    sprite.stroke({ color: accentColor, alpha: 0.9, width: 1.15 });
+    sprite.moveTo(2.7, 0);
+    sprite.lineTo(0.9, -1.5);
+    sprite.lineTo(0.9, 1.5);
+    sprite.closePath();
+    sprite.fill({ color: accentColor, alpha: 0.9 });
+  } else {
+    sprite.roundRect(-2.6, -2.6, 5.2, 5.2, 1.3);
+    sprite.fill({ color: accentColor, alpha: 0.74 });
+  }
+
+  if (tags.has('shield')) {
+    sprite.moveTo(0.8, -2.2);
+    sprite.lineTo(2.5, -1.5);
+    sprite.lineTo(2.5, 1.5);
+    sprite.lineTo(0.8, 2.2);
+    sprite.closePath();
+    sprite.fill({ color: 0xc7d9eb, alpha: 0.8 });
+  }
+
+  sprite.moveTo(SPRITE_RADIUS + 0.75, 0);
+  sprite.lineTo(SPRITE_RADIUS - 1.05, -1.5);
+  sprite.lineTo(SPRITE_RADIUS - 1.05, 1.5);
+  sprite.closePath();
+  sprite.fill({ color: 0xfef6d2, alpha: 0.92 });
 }
 
 export class Soldier {
@@ -79,9 +159,9 @@ export class Soldier {
     this.lastFacing = new Vec2(Math.cos(this.squad.facing), Math.sin(this.squad.facing));
 
     this.sprite = new Graphics();
-    this.sprite.circle(0, 0, SOLDIER_RADIUS);
-    this.sprite.fill({ color: options.color, alpha: 1 });
+    drawGlyph(this.sprite, this.tags, options.color);
     this.sprite.position.set(this.position.x, this.position.y);
+    this.sprite.rotation = Math.atan2(this.lastFacing.y, this.lastFacing.x);
   }
 
   applyDamage(amount: number): void {
@@ -103,6 +183,17 @@ export class Soldier {
       return;
     }
 
+    const speedSq = this.velocity.lenSq();
+    if (speedSq > 1.5) {
+      const invLen = 1 / Math.sqrt(speedSq);
+      this.lastFacing.x = this.velocity.x * invLen;
+      this.lastFacing.y = this.velocity.y * invLen;
+    } else {
+      this.lastFacing.x = Math.cos(this.squad.facing);
+      this.lastFacing.y = Math.sin(this.squad.facing);
+    }
+
     this.sprite.position.set(this.position.x, this.position.y);
+    this.sprite.rotation = Math.atan2(this.lastFacing.y, this.lastFacing.x);
   }
 }

@@ -18,72 +18,102 @@ import type { StateContext } from './StateContext';
 export class TitleState implements IGameState {
   private readonly root = new Container();
   private readonly bg = new Graphics();
+  private readonly backdrop = new Graphics();
+  private readonly heroPanel = new Graphics();
+  private readonly actionsPanel = new Graphics();
+  private readonly metaPanel = new Graphics();
+  private readonly motif = new Graphics();
   private readonly title = new Text({
     text: 'NIZAM',
     style: {
-      fill: 0xf3e2b2,
-      fontFamily: 'monospace',
-      fontSize: 86,
-      fontWeight: 'bold',
+      fill: 0xf7e4b9,
+      fontFamily: 'Georgia, Times New Roman, serif',
+      fontSize: 84,
+      fontWeight: '700',
+      letterSpacing: 2.8,
     },
   });
   private readonly subtitle = new Text({
-    text: 'Bannerlord-lite Campaign',
+    text: 'TACTICAL CAMPAIGN SANDBOX',
     style: {
-      fill: 0xcad8ec,
-      fontFamily: 'monospace',
-      fontSize: 20,
+      fill: 0xb6d3ea,
+      fontFamily: 'Trebuchet MS, Segoe UI, sans-serif',
+      fontSize: 19,
+      fontWeight: '600',
+      letterSpacing: 1.4,
     },
   });
   private readonly description = new Text({
-    text: 'Command squads in tactical battles • Upgrade your army • Conquer the campaign',
+    text: 'Command squads in tactical battles | Build your warband | Survive the campaign map',
     style: {
-      fill: 0xa5c2de,
-      fontFamily: 'monospace',
+      fill: 0xd6e6f5,
+      fontFamily: 'Trebuchet MS, Segoe UI, sans-serif',
       fontSize: 14,
       wordWrap: true,
-      wordWrapWidth: 600,
+      wordWrapWidth: 900,
       align: 'center',
+    },
+  });
+  private readonly actionsHeader = new Text({
+    text: 'Campaign',
+    style: {
+      fill: 0xf4e2b5,
+      fontFamily: 'Trebuchet MS, Segoe UI, sans-serif',
+      fontSize: 18,
+      fontWeight: '700',
+      letterSpacing: 0.8,
+    },
+  });
+  private readonly metaHeader = new Text({
+    text: 'Loadout and Tools',
+    style: {
+      fill: 0xe3f2ff,
+      fontFamily: 'Trebuchet MS, Segoe UI, sans-serif',
+      fontSize: 17,
+      fontWeight: '700',
+      letterSpacing: 0.6,
     },
   });
   private readonly status = new Text({
     text: '',
     style: {
-      fill: 0x9fc2e9,
-      fontFamily: 'monospace',
-      fontSize: 14,
+      fill: 0x9fc6ea,
+      fontFamily: 'Trebuchet MS, Segoe UI, sans-serif',
+      fontSize: 13,
     },
   });
   private readonly difficultyText = new Text({
     text: '',
     style: {
-      fill: 0xf1d79d,
-      fontFamily: 'monospace',
-      fontSize: 16,
+      fill: 0xf0dba9,
+      fontFamily: 'Trebuchet MS, Segoe UI, sans-serif',
+      fontSize: 14,
+      fontWeight: '600',
     },
   });
   private readonly packHeaderText = new Text({
     text: 'Content Pack',
     style: {
-      fill: 0xf1d79d,
-      fontFamily: 'monospace',
-      fontSize: 16,
+      fill: 0xf0dba9,
+      fontFamily: 'Trebuchet MS, Segoe UI, sans-serif',
+      fontSize: 14,
+      fontWeight: '600',
     },
   });
   private readonly packNameText = new Text({
     text: '',
     style: {
       fill: 0xe7f2ff,
-      fontFamily: 'monospace',
+      fontFamily: 'Trebuchet MS, Segoe UI, sans-serif',
       fontSize: 16,
-      fontWeight: 'bold',
+      fontWeight: '700',
     },
   });
   private readonly packDescText = new Text({
     text: '',
     style: {
       fill: 0xb8d3f2,
-      fontFamily: 'monospace',
+      fontFamily: 'Trebuchet MS, Segoe UI, sans-serif',
       fontSize: 13,
       wordWrap: true,
       wordWrapWidth: 520,
@@ -93,7 +123,7 @@ export class TitleState implements IGameState {
     text: '',
     style: {
       fill: 0xffc98d,
-      fontFamily: 'monospace',
+      fontFamily: 'Trebuchet MS, Segoe UI, sans-serif',
       fontSize: 12,
       wordWrap: true,
       wordWrapWidth: 620,
@@ -103,7 +133,7 @@ export class TitleState implements IGameState {
     text: '',
     style: {
       fill: 0xbde0ff,
-      fontFamily: 'monospace',
+      fontFamily: 'Trebuchet MS, Segoe UI, sans-serif',
       fontSize: 12,
       wordWrap: true,
       wordWrapWidth: 620,
@@ -132,16 +162,16 @@ export class TitleState implements IGameState {
     text: 'Play Challenge Code',
     style: {
       fill: 0xf4e2b5,
-      fontFamily: 'monospace',
+      fontFamily: 'Georgia, Times New Roman, serif',
       fontSize: 24,
-      fontWeight: 'bold',
+      fontWeight: '700',
     },
   });
   private readonly challengeModalHint = new Text({
     text: 'Paste challenge code, validate, then start.',
     style: {
       fill: 0xc5dcf7,
-      fontFamily: 'monospace',
+      fontFamily: 'Trebuchet MS, Segoe UI, sans-serif',
       fontSize: 13,
     },
   });
@@ -149,7 +179,7 @@ export class TitleState implements IGameState {
     text: '',
     style: {
       fill: 0x9dd1ff,
-      fontFamily: 'monospace',
+      fontFamily: 'Trebuchet MS, Segoe UI, sans-serif',
       fontSize: 13,
       wordWrap: true,
       wordWrapWidth: 640,
@@ -173,21 +203,32 @@ export class TitleState implements IGameState {
   private challengePayload: ChallengePayloadV1 | null = null;
   private challengeCompatibility: ChallengeCompatibilityResult | null = null;
   private challengeVersionMismatchConfirmed = false;
+  private lastLayoutWidth = -1;
+  private lastLayoutHeight = -1;
 
   constructor(private readonly context: StateContext) {
     this.root.addChild(this.bg);
+    this.root.addChild(this.backdrop);
+    this.root.addChild(this.heroPanel);
+    this.root.addChild(this.actionsPanel);
+    this.root.addChild(this.metaPanel);
+    this.root.addChild(this.motif);
 
     this.title.anchor.set(0.5, 0.5);
     this.subtitle.anchor.set(0.5, 0.5);
     this.description.anchor.set(0.5, 0.5);
+    this.actionsHeader.anchor.set(0, 0.5);
+    this.metaHeader.anchor.set(0, 0.5);
     this.status.anchor.set(0.5, 0.5);
-    this.packHeaderText.anchor.set(0.5, 0.5);
-    this.packNameText.anchor.set(0.5, 0.5);
-    this.packDescText.anchor.set(0.5, 0.5);
-    this.packStatusText.anchor.set(0.5, 0.5);
+    this.packHeaderText.anchor.set(0, 0.5);
+    this.packNameText.anchor.set(0, 0.5);
+    this.packDescText.anchor.set(0, 0);
+    this.packStatusText.anchor.set(0, 0);
+    this.dailyText.anchor.set(0, 0);
 
     this.newRunButton = new TextButton({
       label: 'New Run',
+      variant: 'accent',
       onClick: () => {
         if (this.loadingPack || this.loadingDaily) {
           return;
@@ -199,6 +240,7 @@ export class TitleState implements IGameState {
 
     this.dailyRunButton = new TextButton({
       label: 'Daily Challenge',
+      variant: 'accent',
       onClick: () => {
         if (this.loadingPack || this.loadingDaily) {
           return;
@@ -209,6 +251,7 @@ export class TitleState implements IGameState {
 
     this.continueDailyButton = new TextButton({
       label: 'Continue Daily',
+      variant: 'primary',
       onClick: () => {
         if (this.loadingPack || this.loadingDaily) {
           return;
@@ -219,6 +262,7 @@ export class TitleState implements IGameState {
 
     this.continueChallengeButton = new TextButton({
       label: 'Continue Challenge',
+      variant: 'primary',
       onClick: () => {
         if (this.loadingPack || this.loadingDaily || this.loadingChallenge) {
           return;
@@ -229,6 +273,7 @@ export class TitleState implements IGameState {
 
     this.playChallengeButton = new TextButton({
       label: 'Play Challenge Code',
+      variant: 'secondary',
       onClick: () => {
         if (this.loadingPack || this.loadingDaily || this.loadingChallenge) {
           return;
@@ -239,6 +284,7 @@ export class TitleState implements IGameState {
 
     this.continueButton = new TextButton({
       label: 'Continue',
+      variant: 'primary',
       onClick: () => {
         if (this.loadingPack || this.loadingDaily) {
           return;
@@ -254,6 +300,7 @@ export class TitleState implements IGameState {
 
     this.clearButton = new TextButton({
       label: 'Reset Save',
+      variant: 'danger',
       onClick: () => {
         this.context.clearSaveData();
         this.status.text = 'Save cleared.';
@@ -264,6 +311,7 @@ export class TitleState implements IGameState {
     this.statsButton = new TextButton({
       label: 'Stats',
       width: 170,
+      variant: 'secondary',
       onClick: () => {
         this.context.transitionTo('STATS', { returnState: 'TITLE' });
       },
@@ -271,6 +319,7 @@ export class TitleState implements IGameState {
     this.dailyHistoryButton = new TextButton({
       label: 'Daily History',
       width: 170,
+      variant: 'secondary',
       onClick: () => {
         this.context.transitionTo('DAILY_HISTORY');
       },
@@ -278,6 +327,7 @@ export class TitleState implements IGameState {
     this.compareButton = new TextButton({
       label: 'Compare Results',
       width: 170,
+      variant: 'secondary',
       onClick: () => {
         this.context.transitionTo('COMPARE', { returnState: 'TITLE' });
       },
@@ -285,6 +335,7 @@ export class TitleState implements IGameState {
     this.leaderboardButton = new TextButton({
       label: 'Leaderboards',
       width: 170,
+      variant: 'secondary',
       onClick: () => {
         this.context.transitionTo('LEADERBOARD');
       },
@@ -293,6 +344,7 @@ export class TitleState implements IGameState {
     this.normalButton = new TextButton({
       label: 'Normal',
       width: 130,
+      variant: 'secondary',
       onClick: () => {
         this.selectedDifficulty = DifficultyMode.NORMAL;
         this.refreshDifficultyButtons();
@@ -301,6 +353,7 @@ export class TitleState implements IGameState {
     this.hardButton = new TextButton({
       label: 'Hard',
       width: 130,
+      variant: 'secondary',
       onClick: () => {
         this.selectedDifficulty = DifficultyMode.HARD;
         this.refreshDifficultyButtons();
@@ -311,18 +364,21 @@ export class TitleState implements IGameState {
       label: '<',
       width: 58,
       height: 36,
+      variant: 'secondary',
       onClick: () => this.changePackByStep(-1),
     });
     this.packNextButton = new TextButton({
       label: '>',
       width: 58,
       height: 36,
+      variant: 'secondary',
       onClick: () => this.changePackByStep(1),
     });
 
     this.challengeValidateButton = new TextButton({
       label: 'Validate',
       width: 180,
+      variant: 'secondary',
       onClick: () => {
         void this.validateChallengeInput();
       },
@@ -330,6 +386,7 @@ export class TitleState implements IGameState {
     this.challengeStartButton = new TextButton({
       label: 'Start Challenge',
       width: 220,
+      variant: 'accent',
       onClick: () => {
         void this.startChallengeFromModal();
       },
@@ -337,6 +394,7 @@ export class TitleState implements IGameState {
     this.challengeCloseButton = new TextButton({
       label: 'Close',
       width: 160,
+      variant: 'secondary',
       onClick: () => {
         this.closeChallengeModal();
       },
@@ -345,6 +403,7 @@ export class TitleState implements IGameState {
     this.howToPlayButton = new TextButton({
       label: 'How to Play',
       width: 170,
+      variant: 'secondary',
       onClick: () => {
         this.howToPlayOverlay.show();
       },
@@ -355,6 +414,8 @@ export class TitleState implements IGameState {
     this.root.addChild(this.title);
     this.root.addChild(this.subtitle);
     this.root.addChild(this.description);
+    this.root.addChild(this.actionsHeader);
+    this.root.addChild(this.metaHeader);
     this.root.addChild(this.status);
     this.root.addChild(this.difficultyText);
     this.root.addChild(this.packHeaderText);
@@ -428,7 +489,11 @@ export class TitleState implements IGameState {
       return;
     }
 
-    this.layout();
+    const width = this.context.app.screen.width;
+    const height = this.context.app.screen.height;
+    if (width !== this.lastLayoutWidth || height !== this.lastLayoutHeight) {
+      this.layout();
+    }
   }
 
   private refreshContinueState(): void {
@@ -448,54 +513,217 @@ export class TitleState implements IGameState {
   private layout(): void {
     const width = this.context.app.screen.width;
     const height = this.context.app.screen.height;
+    this.lastLayoutWidth = width;
+    this.lastLayoutHeight = height;
 
-    this.bg.clear();
-    this.bg.rect(0, 0, width, height);
-    this.bg.fill({ color: 0x0f1720, alpha: 1 });
+    const margin = Math.max(14, Math.min(width, height) * 0.024);
+    const frameWidth = Math.max(320, width - margin * 2);
+    const frameX = (width - frameWidth) * 0.5;
+    const panelGap = Math.max(10, Math.min(20, width * 0.016));
+    const narrowLayout = width < 1120;
 
-    this.title.position.set(width * 0.5, height * 0.15);
-    this.subtitle.position.set(width * 0.5, height * 0.21);
-    this.description.position.set(width * 0.5, height * 0.26);
+    const heroHeight = Math.max(150, Math.min(238, height * 0.265));
+    const heroX = frameX;
+    const heroY = margin;
+    const heroW = frameWidth;
+    const heroH = heroHeight;
 
-    this.packHeaderText.position.set(width * 0.5, height * 0.315);
-    this.packNameText.position.set(width * 0.5, height * 0.36);
-    this.packDescText.position.set(width * 0.5, height * 0.402);
-    this.packStatusText.position.set(width * 0.5, height * 0.445);
-    this.dailyText.position.set(width * 0.5, height * 0.49);
+    const lowerTop = heroY + heroH + panelGap;
+    const lowerHeight = Math.max(220, height - lowerTop - margin * 1.6);
 
-    this.packPrevButton.position.set(width * 0.5 - 190, height * 0.342);
-    this.packNextButton.position.set(width * 0.5 + 132, height * 0.342);
+    let actionsX = frameX;
+    let actionsY = lowerTop;
+    let actionsW = frameWidth;
+    let actionsH = lowerHeight;
+    let metaX = frameX;
+    let metaY = lowerTop;
+    let metaW = frameWidth;
+    let metaH = lowerHeight;
 
-    this.newRunButton.position.set(width * 0.5 - 110, height * 0.54);
-    this.dailyRunButton.position.set(width * 0.5 - 110, height * 0.615);
-    this.continueDailyButton.position.set(width * 0.5 - 110, height * 0.69);
-    this.playChallengeButton.position.set(width * 0.5 - 110, height * 0.765);
-    this.continueChallengeButton.position.set(width * 0.5 - 110, height * 0.84);
-    this.continueButton.position.set(width * 0.5 - 110, height * 0.895);
-    this.clearButton.position.set(width * 0.5 - 110, height * 0.945);
-    this.howToPlayButton.position.set(width * 0.5 + 200, height * 0.54);
-    this.statsButton.position.set(width * 0.5 - 370, height * 0.995);
-    this.dailyHistoryButton.position.set(width * 0.5 - 190, height * 0.995);
-    this.compareButton.position.set(width * 0.5 - 10, height * 0.995);
-    this.leaderboardButton.position.set(width * 0.5 + 170, height * 0.995);
+    if (narrowLayout) {
+      actionsH = Math.max(190, Math.min(420, lowerHeight * 0.54));
+      metaY = actionsY + actionsH + panelGap;
+      metaH = Math.max(160, height - metaY - margin * 1.6);
+    } else {
+      actionsW = Math.max(340, Math.min(510, frameWidth * 0.44));
+      actionsH = lowerHeight;
+      metaX = actionsX + actionsW + panelGap;
+      metaW = Math.max(360, frameWidth - actionsW - panelGap);
+      metaH = lowerHeight;
+    }
 
-    this.difficultyText.position.set(width * 0.5 - 130, height * 0.93);
-    this.normalButton.position.set(width * 0.5 - 134, height * 0.96);
-    this.hardButton.position.set(width * 0.5 + 4, height * 0.96);
-    this.status.position.set(width * 0.5, height * 0.99);
+    this.drawBackdrop(width, height, heroX, heroY, heroW, heroH, actionsX, actionsY, actionsW, actionsH, metaX, metaY, metaW, metaH);
+
+    this.title.position.set(heroX + heroW * 0.5, heroY + heroH * 0.34);
+    this.subtitle.position.set(heroX + heroW * 0.5, heroY + heroH * 0.6);
+    this.description.style.wordWrapWidth = Math.max(320, heroW - 84);
+    this.description.position.set(heroX + heroW * 0.5, heroY + heroH * 0.84);
+
+    const actionsHeaderY = actionsY + 26;
+    this.actionsHeader.position.set(actionsX + 24, actionsHeaderY);
+    this.metaHeader.position.set(metaX + 24, metaY + 26);
+
+    const actionButtons = [
+      this.newRunButton,
+      this.dailyRunButton,
+      this.continueDailyButton,
+      this.playChallengeButton,
+      this.continueChallengeButton,
+      this.continueButton,
+      this.clearButton,
+    ];
+    const actionButtonStartY = actionsHeaderY + 22;
+    const actionAvailable = Math.max(160, actionsH - 74);
+    const naturalStackHeight = actionButtons.length * 44 + (actionButtons.length - 1) * 10;
+    const actionScale = Math.max(0.72, Math.min(1, actionAvailable / naturalStackHeight));
+    const actionButtonHeight = 44 * actionScale;
+    const actionGap = Math.max(4, 8 * actionScale);
+    const buttonX = actionsX + (actionsW - 220 * actionScale) * 0.5;
+    for (let i = 0; i < actionButtons.length; i += 1) {
+      const y = actionButtonStartY + i * (actionButtonHeight + actionGap);
+      actionButtons[i].scale.set(actionScale);
+      actionButtons[i].position.set(buttonX, y);
+    }
+
+    const metaLeft = metaX + 22;
+    const metaRight = metaX + metaW - 22;
+    const firstRowY = metaY + 54;
+
+    this.difficultyText.position.set(metaLeft, firstRowY);
+    this.normalButton.position.set(metaLeft, firstRowY + 18);
+    this.hardButton.position.set(metaLeft + 138, firstRowY + 18);
+    if (metaW < 560) {
+      this.howToPlayButton.position.set(metaLeft, firstRowY + 70);
+    } else {
+      this.howToPlayButton.position.set(Math.max(metaLeft, metaRight - 170), firstRowY + 18);
+    }
+
+    const packTop = firstRowY + (metaW < 560 ? 132 : 80);
+    this.packHeaderText.position.set(metaLeft, packTop);
+    this.packNameText.position.set(metaLeft + 108, packTop);
+    this.packPrevButton.position.set(metaRight - 130, packTop - 17);
+    this.packNextButton.position.set(metaRight - 64, packTop - 17);
+
+    this.packDescText.style.wordWrapWidth = Math.max(260, metaW - 44);
+    this.packDescText.position.set(metaLeft, packTop + 20);
+    this.packStatusText.style.wordWrapWidth = Math.max(260, metaW - 44);
+    this.packStatusText.position.set(metaLeft, packTop + 70);
+    this.dailyText.style.wordWrapWidth = Math.max(260, metaW - 44);
+    this.dailyText.position.set(metaLeft, packTop + 120);
+
+    const utilityTop = metaY + metaH - 108;
+    const utilitySingleColumn = metaW < 420;
+    if (metaW < 390) {
+      this.statsButton.position.set(metaLeft, utilityTop - 86);
+      this.dailyHistoryButton.position.set(metaLeft, utilityTop - 34);
+      this.compareButton.position.set(metaLeft, utilityTop + 18);
+      this.leaderboardButton.position.set(metaLeft, utilityTop + 70);
+    } else if (utilitySingleColumn) {
+      this.statsButton.position.set(metaLeft, utilityTop - 36);
+      this.dailyHistoryButton.position.set(metaLeft, utilityTop + 16);
+      this.compareButton.position.set(metaLeft + 178, utilityTop - 36);
+      this.leaderboardButton.position.set(metaLeft + 178, utilityTop + 16);
+    } else {
+      this.statsButton.position.set(metaLeft, utilityTop);
+      this.dailyHistoryButton.position.set(metaLeft + 182, utilityTop);
+      this.compareButton.position.set(metaLeft, utilityTop + 52);
+      this.leaderboardButton.position.set(metaLeft + 182, utilityTop + 52);
+    }
+
+    this.status.position.set(width * 0.5, height - margin * 0.62);
 
     this.layoutChallengeModal(width, height);
     this.howToPlayOverlay.layout(width, height);
   }
 
+  private drawBackdrop(
+    width: number,
+    height: number,
+    heroX: number,
+    heroY: number,
+    heroW: number,
+    heroH: number,
+    actionsX: number,
+    actionsY: number,
+    actionsW: number,
+    actionsH: number,
+    metaX: number,
+    metaY: number,
+    metaW: number,
+    metaH: number,
+  ): void {
+    this.bg.clear();
+    this.bg.rect(0, 0, width, height);
+    this.bg.fill({ color: 0x0a1219, alpha: 1 });
+
+    this.backdrop.clear();
+    this.backdrop.roundRect(10, 10, width - 20, height - 20, 18);
+    this.backdrop.stroke({ color: 0x6d94ba, alpha: 0.2, width: 1.2 });
+
+    this.backdrop.circle(width * 0.15, height * 0.14, Math.max(180, width * 0.15));
+    this.backdrop.fill({ color: 0x1d3951, alpha: 0.22 });
+    this.backdrop.circle(width * 0.88, height * 0.2, Math.max(170, width * 0.12));
+    this.backdrop.fill({ color: 0x4e3320, alpha: 0.18 });
+
+    for (let i = 0; i < 9; i += 1) {
+      const y = height * (0.08 + i * 0.098);
+      this.backdrop.moveTo(0, y);
+      this.backdrop.lineTo(width, y - 42);
+    }
+    this.backdrop.stroke({ color: 0x8cb5da, alpha: 0.07, width: 1 });
+
+    this.heroPanel.clear();
+    this.heroPanel.roundRect(heroX, heroY, heroW, heroH, 16);
+    this.heroPanel.fill({ color: 0x112132, alpha: 0.95 });
+    this.heroPanel.stroke({ color: 0x7ea9cf, alpha: 0.68, width: 1.6 });
+    this.heroPanel.roundRect(heroX + 2, heroY + 2, heroW - 4, Math.max(16, heroH * 0.32), 12);
+    this.heroPanel.fill({ color: 0xffffff, alpha: 0.035 });
+
+    this.actionsPanel.clear();
+    this.actionsPanel.roundRect(actionsX, actionsY, actionsW, actionsH, 14);
+    this.actionsPanel.fill({ color: 0x12202d, alpha: 0.95 });
+    this.actionsPanel.stroke({ color: 0x7d9ab2, alpha: 0.58, width: 1.35 });
+
+    this.metaPanel.clear();
+    this.metaPanel.roundRect(metaX, metaY, metaW, metaH, 14);
+    this.metaPanel.fill({ color: 0x111f2d, alpha: 0.95 });
+    this.metaPanel.stroke({ color: 0x8cb4d8, alpha: 0.64, width: 1.35 });
+
+    this.motif.clear();
+    const motifY = heroY + heroH * 0.5;
+    const leftX = heroX + 44;
+    const rightX = heroX + heroW - 44;
+    this.motif.moveTo(leftX, motifY - 22);
+    this.motif.lineTo(leftX + 14, motifY + 18);
+    this.motif.lineTo(leftX + 36, motifY + 10);
+    this.motif.lineTo(leftX + 24, motifY - 28);
+    this.motif.closePath();
+    this.motif.fill({ color: 0x9fcdf5, alpha: 0.52 });
+
+    this.motif.moveTo(rightX, motifY - 20);
+    this.motif.lineTo(rightX - 22, motifY - 6);
+    this.motif.lineTo(rightX - 22, motifY + 6);
+    this.motif.lineTo(rightX, motifY + 20);
+    this.motif.stroke({ color: 0xf5ca93, alpha: 0.56, width: 2.1 });
+
+    this.motif.roundRect(heroX + heroW * 0.5 - 130, heroY + heroH - 28, 260, 8, 4);
+    this.motif.fill({ color: 0x2c465a, alpha: 0.7 });
+    this.motif.roundRect(heroX + heroW * 0.5 - 70, heroY + heroH - 28, 140, 8, 4);
+    this.motif.fill({ color: 0xcda160, alpha: 0.82 });
+  }
+
   private refreshDifficultyButtons(): void {
     this.difficultyText.text = `Difficulty: ${this.selectedDifficulty}`;
     if (this.selectedDifficulty === DifficultyMode.NORMAL) {
-      this.normalButton.setLabel('[Normal]');
+      this.normalButton.setLabel('Normal');
+      this.normalButton.setVariant('accent');
+      this.hardButton.setVariant('secondary');
       this.hardButton.setLabel('Hard');
     } else {
       this.normalButton.setLabel('Normal');
-      this.hardButton.setLabel('[Hard]');
+      this.normalButton.setVariant('secondary');
+      this.hardButton.setVariant('accent');
+      this.hardButton.setLabel('Hard');
     }
   }
 
@@ -714,13 +942,14 @@ export class TitleState implements IGameState {
       area.placeholder = 'Paste challenge code here...';
       area.style.position = 'fixed';
       area.style.zIndex = '30';
-      area.style.fontFamily = 'monospace';
+      area.style.fontFamily = 'Consolas, Menlo, monospace';
       area.style.fontSize = '12px';
-      area.style.background = '#0f1720';
+      area.style.background = '#0f1a24';
       area.style.color = '#d4e7ff';
-      area.style.border = '1px solid #6e9bc9';
-      area.style.borderRadius = '8px';
-      area.style.padding = '8px';
+      area.style.border = '1px solid #7fa7cb';
+      area.style.borderRadius = '10px';
+      area.style.padding = '10px';
+      area.style.boxShadow = '0 8px 24px rgba(0,0,0,0.35)';
       area.style.resize = 'none';
       area.addEventListener('input', () => {
         this.challengePayload = null;
@@ -882,12 +1111,14 @@ export class TitleState implements IGameState {
 
     this.challengeModalBackdrop.clear();
     this.challengeModalBackdrop.rect(0, 0, width, height);
-    this.challengeModalBackdrop.fill({ color: 0x000000, alpha: 0.7 });
+    this.challengeModalBackdrop.fill({ color: 0x03070b, alpha: 0.78 });
 
     this.challengeModalPanel.clear();
-    this.challengeModalPanel.roundRect(modalX, modalY, modalWidth, modalHeight, 12);
-    this.challengeModalPanel.fill({ color: 0x111c29, alpha: 0.98 });
-    this.challengeModalPanel.stroke({ color: 0x6e9bc9, alpha: 0.92, width: 1.6 });
+    this.challengeModalPanel.roundRect(modalX, modalY, modalWidth, modalHeight, 14);
+    this.challengeModalPanel.fill({ color: 0x101c2a, alpha: 0.98 });
+    this.challengeModalPanel.stroke({ color: 0x83adcf, alpha: 0.9, width: 1.7 });
+    this.challengeModalPanel.roundRect(modalX + 2, modalY + 2, modalWidth - 4, 68, 12);
+    this.challengeModalPanel.fill({ color: 0xffffff, alpha: 0.035 });
 
     this.challengeModalTitle.position.set(width * 0.5, modalY + 34);
     this.challengeModalHint.position.set(width * 0.5, modalY + 58);
@@ -935,3 +1166,4 @@ export class TitleState implements IGameState {
     }
   }
 }
+

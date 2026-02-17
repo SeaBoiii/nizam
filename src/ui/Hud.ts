@@ -24,9 +24,10 @@ export class Hud {
       text: '',
       style: {
         fill: 0xe9f2ff,
-        fontFamily: 'monospace',
-        fontSize: 14,
+        fontFamily: 'Trebuchet MS, Segoe UI, sans-serif',
+        fontSize: 13,
         fontWeight: '500',
+        letterSpacing: 0.3,
       },
     });
 
@@ -50,11 +51,11 @@ export class Hud {
     }
 
     const lines = [
-      `⚡ FPS: ${state.fps.toFixed(0)}`,
-      `🎯 Selected: ${state.selectedCount}`,
-      `⚔️  Type: ${state.selectedArchetypes || 'None'}`,
-      `🛡️  Formation: ${state.formation}`,
-      `📋 Order: ${state.orderMode}`,
+      `FPS: ${state.fps.toFixed(0)}`,
+      `Selected: ${state.selectedCount}`,
+      `Type: ${state.selectedArchetypes || 'None'}`,
+      `Formation: ${state.formation}`,
+      `Order: ${state.orderMode}`,
     ];
     
     this.text.text = lines.join('\n');
@@ -76,3 +77,4 @@ export class Hud {
     this.lastState = { ...state };
   }
 }
+
