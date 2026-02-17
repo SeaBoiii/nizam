@@ -73,6 +73,9 @@ export class Squad {
   readonly anchorVelocity = new Vec2();
   readonly holdAnchor = new Vec2();
   readonly waypoints: Waypoint[] = [];
+  
+  // Performance: Use index pointer instead of shift() to avoid O(n) array operations
+  private waypointIndex = 0;
 
   formation: FormationType = 'line';
   order: OrderMode = 'hold';
@@ -90,6 +93,11 @@ export class Squad {
   private suppressedTimer = 0;
   private abilityMoraleLossMult = 1;
   private rallyTimer = 0;
+  
+  // Performance: Cache flanked state to avoid O(n) check every frame
+  private cachedFlankedState = false;
+  private flankedCheckTimer = 0;
+  private static readonly FLANKED_CHECK_INTERVAL = 0.5; // Check every 0.5 seconds
 
   private readonly slotTemp = new Vec2();
   private readonly worldSlotTemp = new Vec2();
@@ -191,6 +199,7 @@ export class Squad {
   issueMove(destination: Vec2, queue: boolean, facingOverride: number | null): void {
     if (!queue) {
       this.waypoints.length = 0;
+      this.waypointIndex = 0;
     }
 
     this.waypoints.push({
@@ -210,6 +219,7 @@ export class Squad {
   holdPosition(): void {
     this.order = 'hold';
     this.waypoints.length = 0;
+    this.waypointIndex = 0;
     this.holdAnchor.copy(this.anchor);
     this.anchorVelocity.scale(0.6);
     this.chargeTarget = null;
@@ -218,12 +228,14 @@ export class Squad {
   orderCharge(): void {
     this.order = 'charge';
     this.waypoints.length = 0;
+    this.waypointIndex = 0;
     this.reachedMapEdge = false;
   }
 
   orderRetreat(world: WorldBounds): void {
     this.order = 'retreat';
     this.waypoints.length = 0;
+    this.waypointIndex = 0;
     this.waypoints.push({
       position: this.computeRetreatPoint(world),
       facing: null,
@@ -235,6 +247,7 @@ export class Squad {
   orderVolley(): void {
     this.order = 'volley';
     this.waypoints.length = 0;
+    this.waypointIndex = 0;
     this.holdAnchor.copy(this.anchor);
     this.anchorVelocity.scale(0.6);
     this.chargeTarget = null;
@@ -243,6 +256,7 @@ export class Squad {
   orderSkirmish(): void {
     this.order = 'skirmish';
     this.waypoints.length = 0;
+    this.waypointIndex = 0;
     this.holdAnchor.copy(this.anchor);
     this.chargeTarget = null;
   }
@@ -305,8 +319,14 @@ export class Squad {
       this.morale -= casualtyDelta * 2.8 * moraleLossMult;
     }
 
-    const flanked = this.isFlanked(context.allSquads);
-    if (flanked) {
+    // Performance: Only check flanked state periodically, not every frame
+    this.flankedCheckTimer += context.dt;
+    if (this.flankedCheckTimer >= Squad.FLANKED_CHECK_INTERVAL) {
+      this.flankedCheckTimer = 0;
+      this.cachedFlankedState = this.isFlanked(context.allSquads);
+    }
+    
+    if (this.cachedFlankedState) {
       this.morale -= 10 * context.dt * moraleLossMult;
     } else {
       this.morale += 2.6 * context.dt * moraleRegenMult;
@@ -386,7 +406,9 @@ export class Squad {
   }
 
   private followWaypoints(context: SquadUpdateContext): void {
-    if (this.waypoints.length === 0) {
+    const activeWaypointsRemaining = this.waypoints.length - this.waypointIndex;
+    
+    if (activeWaypointsRemaining === 0) {
       if (this.order === 'move') {
         this.holdPosition();
         return;
@@ -400,12 +422,12 @@ export class Squad {
       }
     }
 
-    if (this.waypoints.length === 0) {
+    if (this.waypoints.length - this.waypointIndex === 0) {
       this.anchorVelocity.scale(0.8);
       return;
     }
 
-    const waypoint = this.waypoints[0];
+    const waypoint = this.waypoints[this.waypointIndex];
     const maxSpeed =
       this.order === 'rout'
         ? this.perkedMoveSpeed(this.archetype.stats.moveSpeed * ANCHOR_ROUT_SPEED_BONUS)
@@ -417,13 +439,14 @@ export class Squad {
       if (waypoint.facing !== null) {
         this.desiredFacing = waypoint.facing;
       }
-      this.waypoints.shift();
+      // Performance: Use index instead of shift() to avoid O(n) array operation
+      this.waypointIndex += 1;
 
-      if (this.order === 'move' && this.waypoints.length === 0) {
+      if (this.order === 'move' && this.waypoints.length - this.waypointIndex === 0) {
         this.holdPosition();
       }
 
-      if (this.order === 'retreat' && this.waypoints.length === 0) {
+      if (this.order === 'retreat' && this.waypoints.length - this.waypointIndex === 0) {
         this.holdPosition();
       }
     }
@@ -875,6 +898,7 @@ export class Squad {
   private enterRout(world: WorldBounds): void {
     this.order = 'rout';
     this.waypoints.length = 0;
+    this.waypointIndex = 0;
     this.waypoints.push({
       position: this.computeRetreatPoint(world),
       facing: null,

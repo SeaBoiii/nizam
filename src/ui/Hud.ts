@@ -10,6 +10,9 @@ export interface HudState {
 
 export class Hud {
   private readonly text: Text;
+  
+  // Performance: Cache last state to avoid unnecessary text updates
+  private lastState: HudState | null = null;
 
   constructor(uiLayer: Container) {
     this.text = new Text({
@@ -26,6 +29,18 @@ export class Hud {
   }
 
   update(state: HudState): void {
+    // Performance: Only update text when state actually changes
+    if (
+      this.lastState &&
+      this.lastState.fps === state.fps &&
+      this.lastState.selectedCount === state.selectedCount &&
+      this.lastState.selectedArchetypes === state.selectedArchetypes &&
+      this.lastState.formation === state.formation &&
+      this.lastState.orderMode === state.orderMode
+    ) {
+      return;
+    }
+
     this.text.text = [
       `FPS: ${state.fps.toFixed(0)}`,
       `Selected: ${state.selectedCount}`,
@@ -33,5 +48,7 @@ export class Hud {
       `Formation: ${state.formation}`,
       `Order: ${state.orderMode}`,
     ].join('\n');
+    
+    this.lastState = { ...state };
   }
 }

@@ -21,8 +21,14 @@ export class Minimap {
 
   private width = MINIMAP_WIDTH;
   private height = MINIMAP_HEIGHT;
+  
+  // Performance: Cache last map state to avoid redrawing static terrain every frame
+  private lastMapStateHash = '';
+  private mapStateDirty = true;
+  private readonly terrainGraphics = new Graphics();
 
   constructor(uiLayer: Container, private readonly world: WorldBounds) {
+    this.root.addChild(this.terrainGraphics);
     this.root.addChild(this.graphics);
     this.title.position.set(6, 4);
     this.root.addChild(this.title);
@@ -46,45 +52,18 @@ export class Minimap {
     const scaleX = this.width / this.world.width;
     const scaleY = this.height / this.world.height;
 
+    // Performance: Only redraw terrain when map state changes (gates opening, etc.)
+    const currentMapHash = this.computeMapStateHash(mapState);
+    if (this.mapStateDirty || currentMapHash !== this.lastMapStateHash) {
+      this.lastMapStateHash = currentMapHash;
+      this.mapStateDirty = false;
+      this.redrawTerrain(scaleX, scaleY, mapState);
+    }
+
+    // Clear only dynamic elements (units, squads)
     this.graphics.clear();
-    this.graphics.roundRect(0, 0, this.width, this.height, 8);
-    this.graphics.fill({ color: 0x0b1219, alpha: 0.72 });
-    this.graphics.stroke({ color: 0x7aa5d6, alpha: 0.7, width: 1.4 });
 
-    const forests = mapState.getForestRects();
-    for (let i = 0; i < forests.length; i += 1) {
-      const rect = forests[i];
-      this.graphics.rect(rect.x * scaleX, rect.y * scaleY, rect.w * scaleX, rect.h * scaleY);
-      this.graphics.fill({ color: 0x476f47, alpha: 0.2 });
-    }
-
-    const hills = mapState.getHillRects();
-    for (let i = 0; i < hills.length; i += 1) {
-      const rect = hills[i];
-      this.graphics.rect(rect.x * scaleX, rect.y * scaleY, rect.w * scaleX, rect.h * scaleY);
-      this.graphics.stroke({ color: 0xd8bc82, alpha: 0.35, width: 1 });
-    }
-
-    const obstacles = mapState.getObstacleRects();
-    for (let i = 0; i < obstacles.length; i += 1) {
-      const rect = obstacles[i];
-      this.graphics.rect(rect.x * scaleX, rect.y * scaleY, rect.w * scaleX, rect.h * scaleY);
-      this.graphics.fill({ color: 0x2b3e51, alpha: 0.85 });
-    }
-
-    const gates = mapState.getGateStates();
-    for (let i = 0; i < gates.length; i += 1) {
-      const gate = gates[i];
-      const rect = gate.rect;
-      this.graphics.rect(rect.x * scaleX, rect.y * scaleY, rect.w * scaleX, rect.h * scaleY);
-      if (gate.isOpen) {
-        this.graphics.fill({ color: 0x7bc39d, alpha: 0.4 });
-      } else {
-        this.graphics.fill({ color: 0x95a9bf, alpha: 0.9 });
-      }
-      this.graphics.stroke({ color: 0x0f141a, alpha: 0.85, width: 0.8 });
-    }
-
+    // Draw objective markers
     for (let markerIndex = 0; markerIndex < objectiveMarkers.length; markerIndex += 1) {
       const marker = objectiveMarkers[markerIndex];
       const markerX = marker.x * scaleX;
@@ -117,6 +96,55 @@ export class Minimap {
       const y = squad.anchor.y * scaleY;
       this.graphics.rect(x - 1.8, y - 1.8, 3.6, 3.6);
       this.graphics.fill({ color, alpha: 0.95 });
+    }
+  }
+
+  private computeMapStateHash(mapState: BattleMapState): string {
+    // Create a simple hash based on gate states (main dynamic terrain element)
+    const gates = mapState.getGateStates();
+    return gates.map((g) => `${g.id}:${g.isOpen ? '1' : '0'}`).join('|');
+  }
+
+  private redrawTerrain(scaleX: number, scaleY: number, mapState: BattleMapState): void {
+    this.terrainGraphics.clear();
+    
+    // Draw background
+    this.terrainGraphics.roundRect(0, 0, this.width, this.height, 8);
+    this.terrainGraphics.fill({ color: 0x0b1219, alpha: 0.72 });
+    this.terrainGraphics.stroke({ color: 0x7aa5d6, alpha: 0.7, width: 1.4 });
+
+    const forests = mapState.getForestRects();
+    for (let i = 0; i < forests.length; i += 1) {
+      const rect = forests[i];
+      this.terrainGraphics.rect(rect.x * scaleX, rect.y * scaleY, rect.w * scaleX, rect.h * scaleY);
+      this.terrainGraphics.fill({ color: 0x476f47, alpha: 0.2 });
+    }
+
+    const hills = mapState.getHillRects();
+    for (let i = 0; i < hills.length; i += 1) {
+      const rect = hills[i];
+      this.terrainGraphics.rect(rect.x * scaleX, rect.y * scaleY, rect.w * scaleX, rect.h * scaleY);
+      this.terrainGraphics.stroke({ color: 0xd8bc82, alpha: 0.35, width: 1 });
+    }
+
+    const obstacles = mapState.getObstacleRects();
+    for (let i = 0; i < obstacles.length; i += 1) {
+      const rect = obstacles[i];
+      this.terrainGraphics.rect(rect.x * scaleX, rect.y * scaleY, rect.w * scaleX, rect.h * scaleY);
+      this.terrainGraphics.fill({ color: 0x2b3e51, alpha: 0.85 });
+    }
+
+    const gates = mapState.getGateStates();
+    for (let i = 0; i < gates.length; i += 1) {
+      const gate = gates[i];
+      const rect = gate.rect;
+      this.terrainGraphics.rect(rect.x * scaleX, rect.y * scaleY, rect.w * scaleX, rect.h * scaleY);
+      if (gate.isOpen) {
+        this.terrainGraphics.fill({ color: 0x7bc39d, alpha: 0.4 });
+      } else {
+        this.terrainGraphics.fill({ color: 0x95a9bf, alpha: 0.9 });
+      }
+      this.terrainGraphics.stroke({ color: 0x0f141a, alpha: 0.85, width: 0.8 });
     }
   }
 }

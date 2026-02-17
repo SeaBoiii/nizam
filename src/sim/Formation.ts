@@ -4,6 +4,36 @@ import type { FormationType } from './types';
 const BASE_SPACING = 18;
 const BASE_DEPTH = 18;
 
+// Performance: Pre-computed formation radii to avoid recalculating every frame
+const FORMATION_RADIUS_CACHE = new Map<string, number>();
+
+function getCachedFormationRadius(formation: FormationType, unitCount: number): number {
+  const key = `${formation}-${unitCount}`;
+  let radius = FORMATION_RADIUS_CACHE.get(key);
+  
+  if (radius === undefined) {
+    radius = computeFormationRadius(formation, unitCount);
+    FORMATION_RADIUS_CACHE.set(key, radius);
+  }
+  
+  return radius;
+}
+
+function computeFormationRadius(formation: FormationType, unitCount: number): number {
+  const temp = new Vec2();
+  let maxDistance = 0;
+
+  for (let i = 0; i < unitCount; i += 1) {
+    computeSlotLocal(formation, i, unitCount, temp);
+    const distance = Math.hypot(temp.x, temp.y);
+    if (distance > maxDistance) {
+      maxDistance = distance;
+    }
+  }
+
+  return maxDistance + 24;
+}
+
 function lineSlot(slotIndex: number, unitCount: number, spacing: number, depth: number, out: Vec2): Vec2 {
   const ranks = 2;
   const perRank = Math.ceil(unitCount / ranks);
@@ -79,16 +109,5 @@ export function formationLabel(formation: FormationType): string {
 }
 
 export function estimateFormationRadius(formation: FormationType, unitCount: number): number {
-  const temp = new Vec2();
-  let maxDistance = 0;
-
-  for (let i = 0; i < unitCount; i += 1) {
-    computeSlotLocal(formation, i, unitCount, temp);
-    const distance = Math.hypot(temp.x, temp.y);
-    if (distance > maxDistance) {
-      maxDistance = distance;
-    }
-  }
-
-  return maxDistance + 24;
+  return getCachedFormationRadius(formation, unitCount);
 }
