@@ -22,6 +22,8 @@ export interface StatsV1 {
     battlesWon: number;
     battlesLost: number;
     totalPlayTimeSec: number;
+    dailyRunsStarted: number;
+    dailyRunsCompleted: number;
   };
   byDifficulty: Record<
     DifficultyKey,
@@ -48,6 +50,7 @@ export interface StatsV1 {
     played: Record<string, number>;
     wins: Record<string, number>;
   };
+  dailyBestScoreByDateKey: Record<string, number>;
   lastRun: null | {
     seed: number;
     difficulty: DifficultyKey;
@@ -91,6 +94,8 @@ export function createDefaultStats(): StatsV1 {
       battlesWon: 0,
       battlesLost: 0,
       totalPlayTimeSec: 0,
+      dailyRunsStarted: 0,
+      dailyRunsCompleted: 0,
     },
     byDifficulty: {
       NORMAL: {
@@ -122,6 +127,7 @@ export function createDefaultStats(): StatsV1 {
       played: {},
       wins: {},
     },
+    dailyBestScoreByDateKey: {},
     lastRun: null,
   };
 }
@@ -239,6 +245,8 @@ function sanitizeStats(value: unknown): StatsV1 | null {
       battlesWon: Math.max(0, Math.floor(asNumber(totalsRaw.battlesWon, 0))),
       battlesLost: Math.max(0, Math.floor(asNumber(totalsRaw.battlesLost, 0))),
       totalPlayTimeSec: Math.max(0, asNumber(totalsRaw.totalPlayTimeSec, 0)),
+      dailyRunsStarted: Math.max(0, Math.floor(asNumber(totalsRaw.dailyRunsStarted, 0))),
+      dailyRunsCompleted: Math.max(0, Math.floor(asNumber(totalsRaw.dailyRunsCompleted, 0))),
     },
     byDifficulty: {
       NORMAL: {
@@ -270,6 +278,7 @@ function sanitizeStats(value: unknown): StatsV1 | null {
       played: asRecordNumbers(isObject(value.objectives) ? value.objectives.played : {}),
       wins: asRecordNumbers(isObject(value.objectives) ? value.objectives.wins : {}),
     },
+    dailyBestScoreByDateKey: asRecordNumbers(value.dailyBestScoreByDateKey),
     lastRun: sanitizeLastRun(value.lastRun),
   };
 
@@ -336,4 +345,3 @@ export function findDepthBucket(stats: StatsV1, depth: number): DepthBucketStats
   }
   return stats.byDepthBucket[stats.byDepthBucket.length - 1];
 }
-

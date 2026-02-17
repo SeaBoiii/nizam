@@ -9,6 +9,15 @@ export interface PerkState {
   lastOfferedAtBattleCount: number;
 }
 
+function hashText(value: string): number {
+  let hash = 2166136261 >>> 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return hash >>> 0;
+}
+
 export function createPerkState(): PerkState {
   return {
     pickedPerkIds: [],
@@ -79,7 +88,8 @@ export function getDeterministicPerkChoices(
   const rngSeed =
     (runState.seed ^
       Math.imul(runState.battleNodesCleared + 1, 0x9e3779b1) ^
-      Math.imul(runState.step + 17, 0x85ebca6b)) >>>
+      Math.imul(runState.step + 17, 0x85ebca6b) ^
+      hashText(runState.currentNodeId)) >>>
     0;
   const rng = new SeededRng(rngSeed);
 
@@ -96,4 +106,3 @@ export function getDeterministicPerkChoices(
   }
   return picks;
 }
-

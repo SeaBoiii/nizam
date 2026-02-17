@@ -1,5 +1,6 @@
 import { Container, Graphics, Text } from 'pixi.js';
 import type { ContentLoadStatus, ContentPackManifestEntry } from '../../content/ContentTypes';
+import { getDailySeed } from '../../meta/DailyChallenge';
 import { DifficultyMode } from '../../meta/Difficulty';
 import { TextButton } from '../../ui/widgets/TextButton';
 import type { IGameState } from './IGameState';
@@ -78,8 +79,20 @@ export class TitleState implements IGameState {
       wordWrapWidth: 620,
     },
   });
+  private readonly dailyText = new Text({
+    text: '',
+    style: {
+      fill: 0xbde0ff,
+      fontFamily: 'monospace',
+      fontSize: 12,
+      wordWrap: true,
+      wordWrapWidth: 620,
+    },
+  });
 
   private readonly newRunButton: TextButton;
+  private readonly dailyRunButton: TextButton;
+  private readonly continueDailyButton: TextButton;
   private readonly continueButton: TextButton;
   private readonly clearButton: TextButton;
   private readonly statsButton: TextButton;
@@ -92,6 +105,7 @@ export class TitleState implements IGameState {
   private availablePacks: ContentPackManifestEntry[] = [];
   private selectedPackIndex = 0;
   private loadingPack = false;
+  private loadingDaily = false;
   private mounted = false;
 
   constructor(private readonly context: StateContext) {
@@ -108,7 +122,7 @@ export class TitleState implements IGameState {
     this.newRunButton = new TextButton({
       label: 'New Run',
       onClick: () => {
-        if (this.loadingPack) {
+        if (this.loadingPack || this.loadingDaily) {
           return;
         }
         this.context.startNewRun(this.selectedDifficulty);
@@ -116,10 +130,30 @@ export class TitleState implements IGameState {
       },
     });
 
+    this.dailyRunButton = new TextButton({
+      label: 'Daily Challenge',
+      onClick: () => {
+        if (this.loadingPack || this.loadingDaily) {
+          return;
+        }
+        void this.startDailyChallenge();
+      },
+    });
+
+    this.continueDailyButton = new TextButton({
+      label: 'Continue Daily',
+      onClick: () => {
+        if (this.loadingPack || this.loadingDaily) {
+          return;
+        }
+        void this.continueDailyChallenge();
+      },
+    });
+
     this.continueButton = new TextButton({
       label: 'Continue',
       onClick: () => {
-        if (this.loadingPack) {
+        if (this.loadingPack || this.loadingDaily) {
           return;
         }
         if (this.context.loadSaveData()) {
@@ -185,7 +219,10 @@ export class TitleState implements IGameState {
     this.root.addChild(this.packNameText);
     this.root.addChild(this.packDescText);
     this.root.addChild(this.packStatusText);
+    this.root.addChild(this.dailyText);
     this.root.addChild(this.newRunButton);
+    this.root.addChild(this.dailyRunButton);
+    this.root.addChild(this.continueDailyButton);
     this.root.addChild(this.continueButton);
     this.root.addChild(this.clearButton);
     this.root.addChild(this.statsButton);
@@ -213,6 +250,7 @@ export class TitleState implements IGameState {
 
     this.refreshContinueState();
     this.refreshPackUI(this.context.getContentStatus());
+    this.refreshDailyUI();
   }
 
   onExit(): void {
@@ -229,8 +267,11 @@ export class TitleState implements IGameState {
   }
 
   private refreshContinueState(): void {
-    this.continueButton.setEnabled(this.context.hasSaveData() && !this.loadingPack);
-    this.newRunButton.setEnabled(!this.loadingPack);
+    const locked = this.loadingPack || this.loadingDaily;
+    this.continueButton.setEnabled(this.context.hasSaveData() && !locked);
+    this.newRunButton.setEnabled(!locked);
+    this.dailyRunButton.setEnabled(!locked);
+    this.continueDailyButton.setEnabled(false);
   }
 
   private layout(): void {
@@ -241,25 +282,28 @@ export class TitleState implements IGameState {
     this.bg.rect(0, 0, width, height);
     this.bg.fill({ color: 0x0f1720, alpha: 1 });
 
-    this.title.position.set(width * 0.5, height * 0.2);
-    this.subtitle.position.set(width * 0.5, height * 0.285);
+    this.title.position.set(width * 0.5, height * 0.16);
+    this.subtitle.position.set(width * 0.5, height * 0.24);
 
-    this.packHeaderText.position.set(width * 0.5, height * 0.375);
-    this.packNameText.position.set(width * 0.5, height * 0.425);
-    this.packDescText.position.set(width * 0.5, height * 0.468);
-    this.packStatusText.position.set(width * 0.5, height * 0.52);
+    this.packHeaderText.position.set(width * 0.5, height * 0.315);
+    this.packNameText.position.set(width * 0.5, height * 0.36);
+    this.packDescText.position.set(width * 0.5, height * 0.402);
+    this.packStatusText.position.set(width * 0.5, height * 0.445);
+    this.dailyText.position.set(width * 0.5, height * 0.49);
 
-    this.packPrevButton.position.set(width * 0.5 - 190, height * 0.407);
-    this.packNextButton.position.set(width * 0.5 + 132, height * 0.407);
+    this.packPrevButton.position.set(width * 0.5 - 190, height * 0.342);
+    this.packNextButton.position.set(width * 0.5 + 132, height * 0.342);
 
-    this.newRunButton.position.set(width * 0.5 - 110, height * 0.575);
-    this.continueButton.position.set(width * 0.5 - 110, height * 0.655);
-    this.clearButton.position.set(width * 0.5 - 110, height * 0.735);
-    this.statsButton.position.set(width * 0.5 - 110, height * 0.815);
+    this.newRunButton.position.set(width * 0.5 - 110, height * 0.54);
+    this.dailyRunButton.position.set(width * 0.5 - 110, height * 0.615);
+    this.continueDailyButton.position.set(width * 0.5 - 110, height * 0.69);
+    this.continueButton.position.set(width * 0.5 - 110, height * 0.765);
+    this.clearButton.position.set(width * 0.5 - 110, height * 0.84);
+    this.statsButton.position.set(width * 0.5 - 110, height * 0.915);
 
-    this.difficultyText.position.set(width * 0.5 - 130, height * 0.89);
-    this.normalButton.position.set(width * 0.5 - 134, height * 0.925);
-    this.hardButton.position.set(width * 0.5 + 4, height * 0.925);
+    this.difficultyText.position.set(width * 0.5 - 130, height * 0.94);
+    this.normalButton.position.set(width * 0.5 - 134, height * 0.965);
+    this.hardButton.position.set(width * 0.5 + 4, height * 0.965);
     this.status.position.set(width * 0.5, height * 0.975);
   }
 
@@ -298,6 +342,7 @@ export class TitleState implements IGameState {
     const canShift = this.availablePacks.length > 1 && !this.loadingPack;
     this.packPrevButton.setEnabled(canShift);
     this.packNextButton.setEnabled(canShift);
+    this.refreshDailyUI();
   }
 
   private changePackByStep(step: number): void {
@@ -306,6 +351,116 @@ export class TitleState implements IGameState {
     }
     const nextIndex = (this.selectedPackIndex + step + this.availablePacks.length) % this.availablePacks.length;
     this.applySelectedPack(nextIndex);
+  }
+
+  private refreshDailyUI(): void {
+    const today = getDailySeed();
+    const selectedPack = this.getSelectedPack();
+    const dailySave = this.context.getDailySaveInfo();
+    const stats = this.context.getStatsSnapshot();
+    const bestToday = stats.dailyBestScoreByDateKey[today.dateKey] ?? 0;
+    const locked = this.loadingPack || this.loadingDaily;
+
+    if (locked) {
+      this.dailyText.text = 'Daily: preparing...';
+      this.continueDailyButton.setEnabled(false);
+      this.continueDailyButton.setLabel('Continue Daily');
+      return;
+    }
+
+    const lines: string[] = [];
+    lines.push(`Daily Seed (${today.dateKey} SG): ${today.seed}`);
+    lines.push(`Best Local Daily: ${bestToday > 0 ? bestToday : '-'}`);
+    if (selectedPack.id !== 'base') {
+      lines.push('Daily Challenge uses Base pack for fairness.');
+    }
+
+    if (dailySave === null) {
+      this.continueDailyButton.setEnabled(false);
+      this.continueDailyButton.setLabel('Continue Daily');
+      lines.push("No saved daily run.");
+    } else if (dailySave.isToday && dailySave.inProgress) {
+      this.continueDailyButton.setEnabled(true);
+      this.continueDailyButton.setLabel('Continue Daily (Today)');
+      lines.push('Saved daily run is available for today.');
+    } else if (dailySave.isToday) {
+      this.continueDailyButton.setEnabled(false);
+      this.continueDailyButton.setLabel('Daily Completed (Today)');
+      lines.push('Today\'s daily run is already finished. Start a new daily on the next SG day.');
+    } else {
+      this.continueDailyButton.setEnabled(false);
+      this.continueDailyButton.setLabel(`Saved Daily: ${dailySave.dateKey ?? 'Unknown'}`);
+      lines.push(`Saved daily run is from ${dailySave.dateKey ?? 'Unknown'} (SG).`);
+    }
+
+    this.dailyText.text = lines.join('\n');
+  }
+
+  private async startDailyChallenge(): Promise<void> {
+    this.loadingDaily = true;
+    this.status.text = '';
+    this.refreshContinueState();
+    this.refreshDailyUI();
+
+    try {
+      const started = await this.context.startDailyRun(this.selectedDifficulty);
+      if (!this.mounted) {
+        return;
+      }
+      if (!started) {
+        this.status.text = 'Failed to start daily challenge.';
+        return;
+      }
+      this.context.transitionTo('OVERWORLD');
+    } catch (error) {
+      if (!this.mounted) {
+        return;
+      }
+      this.status.text = `Daily start failed: ${String(error)}`;
+    } finally {
+      this.loadingDaily = false;
+      if (this.mounted) {
+        this.refreshContinueState();
+        this.refreshDailyUI();
+      }
+    }
+  }
+
+  private async continueDailyChallenge(): Promise<void> {
+    this.loadingDaily = true;
+    this.status.text = '';
+    this.refreshContinueState();
+    this.refreshDailyUI();
+
+    try {
+      const loaded = await this.context.loadDailySaveData();
+      if (!this.mounted) {
+        return;
+      }
+      if (!loaded) {
+        const info = this.context.getDailySaveInfo();
+        if (info !== null && !info.isToday) {
+          this.status.text = `Saved daily is from ${info.dateKey ?? 'Unknown'} (SG). Start today's daily instead.`;
+        } else if (info !== null && !info.inProgress) {
+          this.status.text = "Today's daily run is already complete.";
+        } else {
+          this.status.text = 'No valid daily save for today.';
+        }
+        return;
+      }
+      this.context.transitionTo('OVERWORLD');
+    } catch (error) {
+      if (!this.mounted) {
+        return;
+      }
+      this.status.text = `Continue daily failed: ${String(error)}`;
+    } finally {
+      this.loadingDaily = false;
+      if (this.mounted) {
+        this.refreshContinueState();
+        this.refreshDailyUI();
+      }
+    }
   }
 
   private async applySelectedPack(nextIndex: number): Promise<void> {

@@ -113,6 +113,9 @@ export class StatsCollector {
     this.stats.totals.runsStarted += 1;
     const diff = difficultyKey(runState.difficultyMode);
     this.stats.byDifficulty[diff].runsStarted += 1;
+    if (runState.mode === 'DAILY') {
+      this.stats.totals.dailyRunsStarted += 1;
+    }
 
     this.stats.lastRun = {
       seed: runState.seed >>> 0,
@@ -186,6 +189,17 @@ export class StatsCollector {
     if (outcome === 'WIN') {
       this.stats.totals.runsCompleted += 1;
       this.stats.byDifficulty[difficultyKey(runState.difficultyMode)].runsCompleted += 1;
+    }
+    if (runState.mode === 'DAILY') {
+      this.stats.totals.dailyRunsCompleted += 1;
+      const dateKey = runState.dateKey;
+      const finalScore = runState.finalScore;
+      if (dateKey !== null && typeof finalScore === 'number' && Number.isFinite(finalScore)) {
+        const prevBest = this.stats.dailyBestScoreByDateKey[dateKey] ?? 0;
+        if (finalScore > prevBest) {
+          this.stats.dailyBestScoreByDateKey[dateKey] = finalScore;
+        }
+      }
     }
     this.markDirty();
   }

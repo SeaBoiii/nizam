@@ -4,12 +4,14 @@ import { contentManager } from '../content/ContentManager';
 import type { ContentLoadStatus } from '../content/ContentTypes';
 import { createStartingArmy } from '../meta/Army';
 import { buildBugReport } from '../meta/BugReport';
+import { getDailySeed, getSingaporeDateKey } from '../meta/DailyChallenge';
 import { DifficultyMode } from '../meta/Difficulty';
 import { createPerkState } from '../meta/Perks';
+import { computeRunScore } from '../meta/Scoring';
 import { loadSettings, saveSettings, type GameSettings } from '../meta/Settings';
 import { StatsCollector } from '../meta/StatsCollector';
 import { createScenario } from '../meta/ScenarioFactory';
-import { clearSave, hasSave, loadGame, saveGame } from '../meta/Save';
+import { clearSave, hasSave, loadGame, saveGame, type SaveGameData, type SaveSlot } from '../meta/Save';
 import type { BattleResult, BattleScenario } from '../meta/types';
 import { generateMap } from '../overworld/generateMap';
 import type { RunState } from '../overworld/types';
@@ -23,9 +25,10 @@ import { ErrorBoundary, type CapturedErrorInfo } from './ErrorBoundary';
 import type { IGameState } from './states/IGameState';
 import { BattleState } from './states/BattleState';
 import { OverworldState } from './states/OverworldState';
+import { RunEndState } from './states/RunEndState';
 import { RewardsState } from './states/RewardsState';
 import { StatsState } from './states/StatsState';
-import type { CampaignData, GameStateId, StateContext } from './states/StateContext';
+import type { CampaignData, DailySaveInfo, GameStateId, StateContext } from './states/StateContext';
 import { TitleState } from './states/TitleState';
 
 export class Game {
@@ -74,10 +77,17 @@ export class Game {
         this.campaignData = data;
       },
       startNewRun: (mode) => this.startNewRun(mode),
-      hasSaveData: () => hasSave(),
+      startDailyRun: (mode) => this.startDailyRun(mode),
+      hasSaveData: () => hasSave('normal'),
       loadSaveData: () => this.loadSaveData(),
+      getDailySaveInfo: () => this.getDailySaveInfo(),
+      loadDailySaveData: () => this.loadDailySaveData(),
       saveCampaignData: () => this.saveCampaignData(),
       clearSaveData: () => this.clearSaveData(),
+      clearDailySaveData: () => this.clearDailySaveData(),
+      clearActiveRunSave: () => this.clearActiveRunSave(),
+      getActiveSaveSlot: () => this.getActiveSaveSlot(),
+      endCurrentRunSession: () => this.endCurrentRunSession(),
       setPendingScenario: (scenario) => {
         this.pendingScenario = scenario;
       },
@@ -174,7 +184,12 @@ export class Game {
   };
 
   private transitionTo(stateId: GameStateId, payload?: unknown): void {
-    if (stateId === 'TITLE' && this.currentStateId !== 'TITLE' && this.campaignData !== null) {
+    if (
+      stateId === 'TITLE' &&
+      this.currentStateId !== 'TITLE' &&
+      this.campaignData !== null &&
+      this.campaignData.runState.finalScore === null
+    ) {
       this.statsCollector.onRunAbandoned(this.campaignData.runState, this.campaignData.perkState);
     }
     this.setPaused(false);
@@ -205,6 +220,9 @@ export class Game {
       case 'REWARDS':
         this.currentState = new RewardsState(this.stateContext);
         break;
+      case 'RUN_END':
+        this.currentState = new RunEndState(this.stateContext);
+        break;
       case 'STATS':
         this.currentState = new StatsState(this.stateContext);
         break;
@@ -221,7 +239,7 @@ export class Game {
   }
 
   private startNewRun(mode: DifficultyMode = DifficultyMode.NORMAL): void {
-    if (this.campaignData !== null) {
+    if (this.campaignData !== null && this.campaignData.runState.finalScore === null) {
       this.statsCollector.onRunAbandoned(this.campaignData.runState, this.campaignData.perkState);
     }
 
@@ -230,6 +248,9 @@ export class Game {
 
     const runState: RunState = {
       seed,
+      mode: 'NORMAL',
+      dateKey: null,
+      packIdLocked: null,
       currentNodeId: mapState.startNodeId,
       clearedNodeIds: [mapState.startNodeId],
       step: 0,
@@ -241,6 +262,8 @@ export class Game {
       consecutiveLosses: 0,
       lastObjectiveType: null,
       lastMapId: null,
+      finalScore: null,
+      scoreBreakdown: null,
     };
 
     for (let i = 0; i < mapState.nodes.length; i += 1) {
@@ -269,12 +292,117 @@ export class Game {
     this.saveCampaignData();
   }
 
+  private async startDailyRun(mode: DifficultyMode = DifficultyMode.NORMAL): Promise<boolean> {
+    const daily = getDailySeed();
+    const status = await this.setContentPack('base', true);
+    if (!status.loaded || status.loadedPackId === 'embedded') {
+      return false;
+    }
+
+    if (this.campaignData !== null && this.campaignData.runState.finalScore === null) {
+      this.statsCollector.onRunAbandoned(this.campaignData.runState, this.campaignData.perkState);
+    }
+
+    const seed = daily.seed >>> 0;
+    const mapState = generateMap(seed);
+    const runState: RunState = {
+      seed,
+      mode: 'DAILY',
+      dateKey: daily.dateKey,
+      packIdLocked: 'base',
+      currentNodeId: mapState.startNodeId,
+      clearedNodeIds: [mapState.startNodeId],
+      step: 0,
+      difficultyTier: 1,
+      difficultyMode: mode,
+      restBonusBattles: 0,
+      battleNodesCleared: 0,
+      lastRewardedNodeId: '',
+      consecutiveLosses: 0,
+      lastObjectiveType: null,
+      lastMapId: null,
+      finalScore: null,
+      scoreBreakdown: null,
+    };
+
+    for (let i = 0; i < mapState.nodes.length; i += 1) {
+      const node = mapState.nodes[i];
+      node.cleared = node.id === mapState.startNodeId;
+    }
+
+    this.campaignData = {
+      runState,
+      armyState: createStartingArmy(),
+      perkState: createPerkState(),
+      mapState,
+    };
+
+    this.pendingScenario = null;
+    this.lastBattleResult = null;
+    this.lastObjectiveStage = undefined;
+    this.eventRecorder.clear();
+    this.statsCollector.onRunStarted(runState, this.campaignData.perkState);
+    this.eventRecorder.record('RUN_STARTED', {
+      seed,
+      difficulty: mode,
+      startNodeId: mapState.startNodeId,
+      mode: 'DAILY',
+      dateKey: daily.dateKey,
+    });
+
+    this.saveCampaignData();
+    return true;
+  }
+
   private loadSaveData(): boolean {
-    const loaded = loadGame();
+    const loaded = loadGame('normal');
     if (loaded === null) {
       return false;
     }
 
+    return this.applyLoadedSave(loaded);
+  }
+
+  private async loadDailySaveData(): Promise<boolean> {
+    const loaded = loadGame('daily');
+    if (loaded === null) {
+      return false;
+    }
+
+    if (loaded.runState.mode !== 'DAILY') {
+      return false;
+    }
+
+    const dailyInfo = this.getDailySaveInfo();
+    if (dailyInfo === null || !dailyInfo.isToday || !dailyInfo.inProgress) {
+      return false;
+    }
+
+    const status = await this.setContentPack('base', true);
+    if (!status.loaded || status.loadedPackId === 'embedded') {
+      return false;
+    }
+
+    return this.applyLoadedSave(loaded);
+  }
+
+  private getDailySaveInfo(): DailySaveInfo | null {
+    const loaded = loadGame('daily');
+    if (loaded === null || loaded.runState.mode !== 'DAILY') {
+      return null;
+    }
+    const todayDateKey = getSingaporeDateKey();
+    const inProgress = loaded.runState.finalScore === null;
+    return {
+      dateKey: loaded.runState.dateKey,
+      isToday: loaded.runState.dateKey === todayDateKey,
+      inProgress,
+      difficulty: loaded.runState.difficultyMode,
+      seed: loaded.runState.seed,
+    };
+  }
+
+  private applyLoadedSave(loaded: SaveGameData): boolean {
     const runState: RunState = loaded.runState;
     const mapState = loaded.mapState;
     let hasCurrentNode = false;
@@ -310,6 +438,8 @@ export class Game {
       seed: runState.seed,
       difficulty: runState.difficultyMode,
       currentNodeId: runState.currentNodeId,
+      mode: runState.mode,
+      dateKey: runState.dateKey ?? '',
     });
 
     return true;
@@ -326,12 +456,38 @@ export class Game {
       armyState: this.campaignData.armyState,
       perkState: this.campaignData.perkState,
       mapState: this.campaignData.mapState,
-    });
+    }, this.getActiveSaveSlot() ?? 'normal');
     this.statsCollector.saveNow();
   }
 
   private clearSaveData(): void {
-    clearSave();
+    clearSave('normal');
+  }
+
+  private clearDailySaveData(): void {
+    clearSave('daily');
+  }
+
+  private clearActiveRunSave(): void {
+    const slot = this.getActiveSaveSlot();
+    if (slot !== null) {
+      clearSave(slot);
+    }
+  }
+
+  private getActiveSaveSlot(): SaveSlot | null {
+    if (this.campaignData === null) {
+      return null;
+    }
+    return this.campaignData.runState.mode === 'DAILY' ? 'daily' : 'normal';
+  }
+
+  private endCurrentRunSession(): void {
+    this.clearActiveRunSave();
+    this.campaignData = null;
+    this.pendingScenario = null;
+    this.lastBattleResult = null;
+    this.lastObjectiveStage = undefined;
   }
 
   private readonly onBeforeUnload = (): void => {
@@ -390,14 +546,14 @@ export class Game {
     this.refreshContentWarning();
   }
 
-  private async setContentPack(packId: string): Promise<ContentLoadStatus> {
-    if (this.currentStateId !== 'TITLE') {
+  private async setContentPack(packId: string, persistToSettings = true): Promise<ContentLoadStatus> {
+    if (this.currentStateId !== 'TITLE' && this.currentStateId !== 'RUN_END') {
       console.warn('[Game] Ignored content pack change outside Title state.');
       return contentManager.getStatus();
     }
 
     const normalizedPackId = packId.trim().length > 0 ? packId.trim() : 'base';
-    if (this.settings.contentPackId !== normalizedPackId) {
+    if (persistToSettings && this.settings.contentPackId !== normalizedPackId) {
       this.settings = {
         ...this.settings,
         contentPackId: normalizedPackId,
@@ -554,13 +710,6 @@ export class Game {
       playerRemaining: result.playerRemaining,
       enemyRemaining: result.enemyRemaining,
     });
-    if (this.campaignData !== null && result.scenario.nodeType === 'BOSS') {
-      this.statsCollector.onRunCompleted(
-        this.campaignData.runState,
-        this.campaignData.perkState,
-        result.victory ? 'WIN' : 'LOSS',
-      );
-    }
   }
 
   private markBattleAborted(): void {
@@ -577,11 +726,58 @@ export class Game {
     if (this.campaignData === null) {
       return;
     }
+    const runState = this.campaignData.runState;
+    const score = this.computeCurrentRunScore(outcome === 'WIN');
+    runState.finalScore = score.finalScore;
+    runState.scoreBreakdown = score;
+
     this.statsCollector.onRunCompleted(this.campaignData.runState, this.campaignData.perkState, outcome);
     this.eventRecorder.record('RUN_COMPLETED', {
       outcome,
-      seed: this.campaignData.runState.seed,
-      step: this.campaignData.runState.step,
+      seed: runState.seed,
+      step: runState.step,
+      mode: runState.mode,
+      dateKey: runState.dateKey ?? '',
+      score: score.finalScore,
+    });
+  }
+
+  private computeCurrentRunScore(bossCleared: boolean): import('../overworld/types').RunScoreBreakdown {
+    if (this.campaignData === null) {
+      return computeRunScore({
+        nodesCleared: 0,
+        battlesWon: 0,
+        totalBattleDurationSec: 0,
+        avgCasualtiesPct: 0,
+        difficulty: DifficultyMode.NORMAL,
+        bossCleared,
+      });
+    }
+
+    const runState = this.campaignData.runState;
+    const snapshot = this.statsCollector.getSnapshot();
+    const lastRun = snapshot.lastRun;
+    const summaries = lastRun ? lastRun.battleSummaries : [];
+
+    let battlesWon = 0;
+    let totalDurationSec = 0;
+    let casualtiesAcc = 0;
+    for (let i = 0; i < summaries.length; i += 1) {
+      if (summaries[i].won) {
+        battlesWon += 1;
+      }
+      totalDurationSec += summaries[i].durationSec;
+      casualtiesAcc += summaries[i].playerCasualtiesPct;
+    }
+    const avgCasualtiesPct = summaries.length > 0 ? casualtiesAcc / summaries.length : 0;
+
+    return computeRunScore({
+      nodesCleared: runState.clearedNodeIds.length,
+      battlesWon,
+      totalBattleDurationSec: totalDurationSec,
+      avgCasualtiesPct,
+      difficulty: runState.difficultyMode,
+      bossCleared,
     });
   }
 

@@ -8,8 +8,17 @@ import type { BattleResult, BattleScenario } from '../../meta/types';
 import type { MapState, RunState } from '../../overworld/types';
 import type { ContentLoadStatus, ContentPackManifestEntry } from '../../content/ContentTypes';
 import type { GameEvents } from '../../sim/events/GameEvents';
+import type { SaveSlot } from '../../meta/Save';
 
-export type GameStateId = 'TITLE' | 'OVERWORLD' | 'BATTLE' | 'REWARDS' | 'STATS';
+export type GameStateId = 'TITLE' | 'OVERWORLD' | 'BATTLE' | 'REWARDS' | 'RUN_END' | 'STATS';
+
+export interface DailySaveInfo {
+  dateKey: string | null;
+  isToday: boolean;
+  inProgress: boolean;
+  difficulty: DifficultyMode;
+  seed: number;
+}
 
 export interface CampaignData {
   runState: RunState;
@@ -28,10 +37,17 @@ export interface StateContext {
   getCampaignData(): CampaignData | null;
   setCampaignData(data: CampaignData | null): void;
   startNewRun(mode?: DifficultyMode): void;
+  startDailyRun(mode?: DifficultyMode): Promise<boolean>;
   hasSaveData(): boolean;
   loadSaveData(): boolean;
+  getDailySaveInfo(): DailySaveInfo | null;
+  loadDailySaveData(): Promise<boolean>;
   saveCampaignData(): void;
   clearSaveData(): void;
+  clearDailySaveData(): void;
+  clearActiveRunSave(): void;
+  getActiveSaveSlot(): SaveSlot | null;
+  endCurrentRunSession(): void;
   setPendingScenario(scenario: BattleScenario): void;
   getPendingScenario(): BattleScenario | null;
   setLastBattleResult(result: BattleResult): void;

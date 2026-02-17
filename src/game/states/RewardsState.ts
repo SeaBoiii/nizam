@@ -56,6 +56,7 @@ export class RewardsState implements IGameState {
   private perkChoicePending = false;
   private allowBonusChoices = true;
   private returnToTitleOnContinue = false;
+  private goToRunEndOnContinue = false;
 
   constructor(private readonly context: StateContext) {
     this.root.addChild(this.bg);
@@ -79,6 +80,10 @@ export class RewardsState implements IGameState {
     this.continueButton = new TextButton({
       label: 'Continue',
       onClick: () => {
+        if (this.goToRunEndOnContinue) {
+          this.context.transitionTo('RUN_END');
+          return;
+        }
         if (this.returnToTitleOnContinue) {
           this.context.clearSaveData();
           this.context.setCampaignData(null);
@@ -116,13 +121,16 @@ export class RewardsState implements IGameState {
     this.perkChoicePending = false;
     this.allowBonusChoices = true;
     this.returnToTitleOnContinue = false;
+    this.goToRunEndOnContinue = false;
     this.perkChoice.hide();
 
     const victory = resolvedResult.victory;
-    const bossLoss = !victory && resolvedResult.scenario.nodeType === 'BOSS';
-    this.allowBonusChoices = victory;
-    this.returnToTitleOnContinue = bossLoss;
-    this.continueButton.setLabel(bossLoss ? 'Back To Title' : 'Continue');
+    const bossBattle = resolvedResult.scenario.nodeType === 'BOSS';
+    const bossLoss = !victory && bossBattle;
+    this.allowBonusChoices = victory && !bossBattle;
+    this.goToRunEndOnContinue = bossBattle;
+    this.returnToTitleOnContinue = false;
+    this.continueButton.setLabel(bossBattle ? 'View Run Summary' : bossLoss ? 'Back To Title' : 'Continue');
 
     const alreadyRewarded = campaign.runState.lastRewardedNodeId === resolvedResult.scenario.nodeId;
     const scaling = getScaling(campaign.runState.step, campaign.runState.difficultyMode);
@@ -178,10 +186,12 @@ export class RewardsState implements IGameState {
     }
 
     this.title.text = victory
-      ? 'Victory Rewards'
+      ? bossBattle
+        ? 'Victory - Run Complete'
+        : 'Victory Rewards'
       : bossLoss
-        ? 'Defeat — Run Ends'
-        : 'Defeat — You regroup and recover';
+        ? 'Defeat - Run Ends'
+        : 'Defeat - You regroup and recover';
 
     const summaryLines = [
       `Outcome: ${victory ? 'Victory' : bossLoss ? 'Defeat (Boss)' : 'Defeat'}`,
@@ -198,13 +208,17 @@ export class RewardsState implements IGameState {
     if (alreadyRewarded) {
       this.rewardInfo.text = this.allowBonusChoices
         ? 'Rewards already claimed for this node.\nChoose one bonus:'
-        : bossLoss
-          ? 'Boss defeat recorded. Run ended.\nReturn to Title.'
+        : bossBattle
+          ? `Boss ${victory ? 'victory' : 'defeat'} recorded.\nView run summary to finish.`
           : 'Rewards already claimed for this node.';
-    } else if (victory) {
+    } else if (victory && !bossBattle) {
       this.rewardInfo.text = `Gold +${goldGain}    Recruits +${recruitsGain}${
         fieldMedicBonus > 0 ? ` (+${fieldMedicBonus} Field Medic)` : ''
       }\nChoose one bonus:`;
+    } else if (victory && bossBattle) {
+      this.rewardInfo.text = `Gold +${goldGain}    Recruits +${recruitsGain}${
+        fieldMedicBonus > 0 ? ` (+${fieldMedicBonus} Field Medic)` : ''
+      }\nFinal score is ready. View run summary.`;
     } else if (bossLoss) {
       this.rewardInfo.text = 'The boss battle was lost. This run has ended.\nNo consolation rewards granted.';
     } else {
@@ -213,7 +227,7 @@ export class RewardsState implements IGameState {
       }\nConsolation Bonus x${consolationMultiplier.toFixed(1)}`;
     }
 
-    if (!alreadyRewarded && victory) {
+    if (!alreadyRewarded && this.allowBonusChoices) {
       this.maybeOfferPerk(campaign);
     }
 

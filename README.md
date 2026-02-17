@@ -140,6 +140,8 @@ If a selected pack is missing/invalid, the loader falls back to `base`. If `base
 
 - Title: click `New Run`, `Continue`, `Reset Save`, `Stats`
 - Title: choose `Content Pack` with `<` / `>` before starting or continuing
+- Title: `Daily Challenge` starts a seeded daily run (Asia/Singapore date)
+- Title: `Continue Daily` resumes only today's daily save (if available)
 - Title: pick `Normal` or `Hard` before `New Run`
 - Overworld: left click connected nodes to advance, click `Back To Title` to return
 - Battle camera pan: `WASD` or Arrow keys
@@ -263,6 +265,21 @@ Use `F1` or `` ` `` to toggle.
 - `Restart Run` appears outside battle.
 
 After content reload, restart battle/run to apply changes to newly spawned units/scenarios.
+
+## Daily Challenge + Share Result (Sprint 15.1)
+
+- Daily challenge mode is local-only (no backend, no leaderboard, no network calls).
+- Daily seed is derived from the Asia/Singapore calendar date (`YYYY-MM-DD`).
+- For fairness, Daily Challenge is locked to the `Base` content pack.
+- Daily save uses a separate localStorage slot:
+  - normal run: `nizam_save_v1`
+  - daily run: `nizam_save_daily_v1`
+- Finishing a boss run opens a run summary screen with:
+  - score + transparent breakdown
+  - seed/date/mode/difficulty
+  - perks picked
+  - `Copy Result` for sharing text in chats/issues
+- Share strings include content pack/version so comparisons are meaningful.
 
 ## Mod packs (Sprint 14)
 

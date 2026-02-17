@@ -2,10 +2,12 @@ import { contentManager } from '../content/ContentManager';
 import type { ArmyState, SquadMeta } from './Army';
 import { DifficultyMode, normalizeDifficultyMode } from './Difficulty';
 import { createPerkState, type PerkState } from './Perks';
-import type { MapState, Node, RunState } from '../overworld/types';
+import type { MapState, Node, RunMode, RunScoreBreakdown, RunState } from '../overworld/types';
 
-const SAVE_KEY = 'nizam_save_v1';
-const SAVE_VERSION = 3;
+const NORMAL_SAVE_KEY = 'nizam_save_v1';
+const DAILY_SAVE_KEY = 'nizam_save_daily_v1';
+const SAVE_VERSION = 4;
+export type SaveSlot = 'normal' | 'daily';
 
 interface LegacySaveV1 {
   version: number;
@@ -19,6 +21,15 @@ interface LegacySaveV2 {
   contentVersion?: string;
   runState: Partial<RunState> & Record<string, unknown>;
   armyState: Partial<ArmyState> & Record<string, unknown>;
+  mapState: Partial<MapState> & Record<string, unknown>;
+}
+
+interface LegacySaveV3 {
+  saveVersion: number;
+  contentVersion?: string;
+  runState: Partial<RunState> & Record<string, unknown>;
+  armyState: Partial<ArmyState> & Record<string, unknown>;
+  perkState?: Partial<PerkState> & Record<string, unknown>;
   mapState: Partial<MapState> & Record<string, unknown>;
 }
 
@@ -53,6 +64,35 @@ function asNullableString(value: unknown): string | null {
   return value.length > 0 ? value : null;
 }
 
+function asRunMode(value: unknown): RunMode {
+  return value === 'DAILY' ? 'DAILY' : 'NORMAL';
+}
+
+function sanitizeScoreBreakdown(value: unknown): RunScoreBreakdown | null {
+  if (!isObject(value)) {
+    return null;
+  }
+  const finalScore = asNumber(value.finalScore, -1);
+  if (!Number.isFinite(finalScore) || finalScore < 0) {
+    return null;
+  }
+
+  return {
+    baseScore: Math.max(0, Math.floor(asNumber(value.baseScore, 0))),
+    bossBonus: Math.max(0, Math.floor(asNumber(value.bossBonus, 0))),
+    nodesScore: Math.max(0, Math.floor(asNumber(value.nodesScore, 0))),
+    battlesScore: Math.max(0, Math.floor(asNumber(value.battlesScore, 0))),
+    timePenalty: Math.max(0, Math.floor(asNumber(value.timePenalty, 0))),
+    casualtyPenalty: Math.max(0, Math.floor(asNumber(value.casualtyPenalty, 0))),
+    difficultyMult: Math.max(0.1, asNumber(value.difficultyMult, 1)),
+    finalScore: Math.max(0, Math.floor(finalScore)),
+    nodesCleared: Math.max(0, Math.floor(asNumber(value.nodesCleared, 0))),
+    battlesWon: Math.max(0, Math.floor(asNumber(value.battlesWon, 0))),
+    totalBattleDurationSec: Math.max(0, asNumber(value.totalBattleDurationSec, 0)),
+    avgCasualtiesPct: Math.max(0, Math.min(1, asNumber(value.avgCasualtiesPct, 0))),
+  };
+}
+
 function asStringArray(value: unknown, fallback: string[]): string[] {
   if (!Array.isArray(value)) {
     return fallback;
@@ -72,6 +112,7 @@ function sanitizeRunState(value: unknown): RunState | null {
   }
 
   const seed = asNumber(value.seed, Date.now() >>> 0);
+  const mode = asRunMode(value.mode);
   const currentNodeId = asString(value.currentNodeId, 'node_0');
   const clearedNodeIds = asStringArray(value.clearedNodeIds, [currentNodeId]);
 
@@ -79,6 +120,9 @@ function sanitizeRunState(value: unknown): RunState | null {
 
   return {
     seed: seed >>> 0,
+    mode,
+    dateKey: asNullableString(value.dateKey),
+    packIdLocked: asNullableString(value.packIdLocked),
     currentNodeId,
     clearedNodeIds,
     step: Math.max(0, Math.floor(asNumber(value.step, 0))),
@@ -90,6 +134,10 @@ function sanitizeRunState(value: unknown): RunState | null {
     consecutiveLosses: Math.max(0, Math.floor(asNumber(value.consecutiveLosses, 0))),
     lastObjectiveType: asNullableString(value.lastObjectiveType),
     lastMapId: asNullableString(value.lastMapId),
+    finalScore: Number.isFinite(asNumber(value.finalScore, NaN))
+      ? Math.max(0, Math.floor(asNumber(value.finalScore, 0)))
+      : null,
+    scoreBreakdown: sanitizeScoreBreakdown(value.scoreBreakdown),
   };
 }
 
@@ -243,12 +291,20 @@ function migrateRunState(runState: RunState, mapState: MapState): RunState {
 
   return {
     ...runState,
+    mode: runState.mode ?? 'NORMAL',
+    dateKey: runState.dateKey ?? null,
+    packIdLocked: runState.packIdLocked ?? null,
     difficultyMode: runState.difficultyMode ?? DifficultyMode.NORMAL,
     battleNodesCleared,
     lastRewardedNodeId: runState.lastRewardedNodeId ?? '',
     consecutiveLosses: Math.max(0, Math.floor(runState.consecutiveLosses ?? 0)),
     lastObjectiveType: runState.lastObjectiveType ?? null,
     lastMapId: runState.lastMapId ?? null,
+    finalScore:
+      typeof runState.finalScore === 'number' && Number.isFinite(runState.finalScore)
+        ? Math.max(0, Math.floor(runState.finalScore))
+        : null,
+    scoreBreakdown: runState.scoreBreakdown ?? null,
   };
 }
 
@@ -268,6 +324,26 @@ function normalizeSaveShape(raw: unknown): SaveGameData | null {
     return {
       saveVersion: SAVE_VERSION,
       contentVersion: asString(raw.contentVersion, contentManager.getStatus().contentVersion),
+      runState: migrateRunState(runState, mapState),
+      armyState,
+      perkState,
+      mapState,
+    };
+  }
+
+  if (asNumber(raw.saveVersion, -1) === 3) {
+    const legacy = raw as unknown as LegacySaveV3;
+    const runState = sanitizeRunState(legacy.runState);
+    const armyState = sanitizeArmyState(legacy.armyState);
+    const mapState = sanitizeMapState(legacy.mapState);
+    const perkState = sanitizePerkState(legacy.perkState);
+    if (runState === null || armyState === null || mapState === null) {
+      return null;
+    }
+    console.warn('[Save] Migrated save v3 to v4.');
+    return {
+      saveVersion: SAVE_VERSION,
+      contentVersion: asString(legacy.contentVersion, contentManager.getStatus().contentVersion),
       runState: migrateRunState(runState, mapState),
       armyState,
       perkState,
@@ -316,7 +392,11 @@ function normalizeSaveShape(raw: unknown): SaveGameData | null {
   return null;
 }
 
-export function saveGame(data: Omit<SaveGameData, 'saveVersion' | 'contentVersion'>): void {
+function resolveSaveKey(slot: SaveSlot): string {
+  return slot === 'daily' ? DAILY_SAVE_KEY : NORMAL_SAVE_KEY;
+}
+
+export function saveGame(data: Omit<SaveGameData, 'saveVersion' | 'contentVersion'>, slot: SaveSlot = 'normal'): void {
   if (typeof window === 'undefined' || !window.localStorage) {
     return;
   }
@@ -330,15 +410,15 @@ export function saveGame(data: Omit<SaveGameData, 'saveVersion' | 'contentVersio
     mapState: data.mapState,
   };
 
-  window.localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
+  window.localStorage.setItem(resolveSaveKey(slot), JSON.stringify(payload));
 }
 
-export function loadGame(): SaveGameData | null {
+export function loadGame(slot: SaveSlot = 'normal'): SaveGameData | null {
   if (typeof window === 'undefined' || !window.localStorage) {
     return null;
   }
 
-  const raw = window.localStorage.getItem(SAVE_KEY);
+  const raw = window.localStorage.getItem(resolveSaveKey(slot));
   if (!raw) {
     return null;
   }
@@ -351,14 +431,14 @@ export function loadGame(): SaveGameData | null {
   }
 }
 
-export function clearSave(): void {
+export function clearSave(slot: SaveSlot = 'normal'): void {
   if (typeof window === 'undefined' || !window.localStorage) {
     return;
   }
 
-  window.localStorage.removeItem(SAVE_KEY);
+  window.localStorage.removeItem(resolveSaveKey(slot));
 }
 
-export function hasSave(): boolean {
-  return loadGame() !== null;
+export function hasSave(slot: SaveSlot = 'normal'): boolean {
+  return loadGame(slot) !== null;
 }

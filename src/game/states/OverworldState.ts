@@ -442,6 +442,7 @@ export class OverworldState implements IGameState {
       `Supplies: ${campaign.armyState.supplies}`,
       `Recruits: ${campaign.armyState.recruits}`,
       `Current Node: ${currentType}`,
+      `Run: ${campaign.runState.mode}${campaign.runState.dateKey ? ` ${campaign.runState.dateKey}` : ''}`,
       `Mode: ${campaign.runState.difficultyMode}`,
       `Pack: ${contentManager.getStatus().loadedPackName}`,
       `Tier: ${campaign.runState.difficultyTier}`,

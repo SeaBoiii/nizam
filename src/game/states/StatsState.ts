@@ -186,6 +186,7 @@ export class StatsState implements IGameState {
 
     return [
       `Runs: started ${totals.runsStarted} | completed ${totals.runsCompleted} | abandoned ${totals.runsAbandoned}`,
+      `Daily Runs: started ${totals.dailyRunsStarted} | completed ${totals.dailyRunsCompleted}`,
       `Battles: played ${totals.battlesPlayed} | won ${totals.battlesWon} | lost ${totals.battlesLost} | winrate ${overallWinrate}`,
       `Play Time: ${formatDuration(totals.totalPlayTimeSec)}`,
       '',
