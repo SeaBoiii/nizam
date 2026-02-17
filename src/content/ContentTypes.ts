@@ -344,10 +344,45 @@ export interface LoadedContent {
 
 export type ContentFileName = keyof LoadedContent;
 
+export interface ContentPackManifestEntry {
+  id: string;
+  name: string;
+  desc: string;
+}
+
+export interface ContentPacksManifest {
+  version: string;
+  packs: ContentPackManifestEntry[];
+}
+
+export interface ContentVersions {
+  unitsVersion?: string;
+  upgradesVersion?: string;
+  perksVersion?: string;
+  objectivesVersion?: string;
+  nodesVersion?: string;
+  scenariosVersion?: string;
+  mapsVersion?: string;
+}
+
+export interface ContentPackLoadResult {
+  ok: boolean;
+  usingFallback: boolean;
+  loadedPackId: string;
+  errors: string[];
+  versions: ContentVersions;
+}
+
 export interface ContentLoadStatus {
   loaded: boolean;
   fallbackUsed: boolean;
   contentVersion: string;
   errors: string[];
   sourceByFile: Record<ContentFileName, 'json' | 'default'>;
+  selectedPackId: string;
+  loadedPackId: string;
+  selectedPackName: string;
+  loadedPackName: string;
+  versions: ContentVersions;
+  packManifestVersion: string;
 }

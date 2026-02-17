@@ -1,0 +1,27 @@
+{
+  "contentVersion": "1.0.0",
+  "maxTier": 3,
+  "defaultUpgradeCost": 0,
+  "paths": {
+    "infantry": {
+      "nextTierByTier": { "1": 2, "2": 3 },
+      "costByTier": { "2": 0, "3": 0 }
+    },
+    "spearmen": {
+      "nextTierByTier": { "1": 2, "2": 3 },
+      "costByTier": { "2": 0, "3": 0 }
+    },
+    "cavalry": {
+      "nextTierByTier": { "1": 2, "2": 3 },
+      "costByTier": { "2": 0, "3": 0 }
+    },
+    "archers": {
+      "nextTierByTier": { "1": 2, "2": 3 },
+      "costByTier": { "2": 0, "3": 0 }
+    },
+    "slingers": {
+      "nextTierByTier": { "1": 2, "2": 3 },
+      "costByTier": { "2": 0, "3": 0 }
+    }
+  }
+}

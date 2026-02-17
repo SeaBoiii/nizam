@@ -1,5 +1,6 @@
 export interface GameSettings {
   version: 1;
+  contentPackId: string;
   masterVolume: number;
   sfxVolume: number;
   musicVolume: number;
@@ -13,6 +14,7 @@ const SETTINGS_KEY = 'nizam_settings_v1';
 
 const DEFAULT_SETTINGS: GameSettings = {
   version: 1,
+  contentPackId: 'base',
   masterVolume: 0.85,
   sfxVolume: 0.9,
   musicVolume: 0.6,
@@ -43,6 +45,7 @@ function sanitize(value: unknown): GameSettings {
   const raw = value as Record<string, unknown>;
   return {
     version: 1,
+    contentPackId: typeof raw.contentPackId === 'string' && raw.contentPackId.trim().length > 0 ? raw.contentPackId : 'base',
     masterVolume: clamp(raw.masterVolume, 0, 1, DEFAULT_SETTINGS.masterVolume),
     sfxVolume: clamp(raw.sfxVolume, 0, 1, DEFAULT_SETTINGS.sfxVolume),
     musicVolume: clamp(raw.musicVolume, 0, 1, DEFAULT_SETTINGS.musicVolume),
@@ -89,4 +92,3 @@ export function resetSettings(): GameSettings {
   saveSettings(settings);
   return settings;
 }
-

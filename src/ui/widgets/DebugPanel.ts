@@ -7,6 +7,9 @@ export interface DebugPanelState {
   contentStatus: string;
   contentVersion: string;
   fallbackUsed: boolean;
+  selectedPackId: string;
+  loadedPackId: string;
+  contentErrors: string[];
   restartButtonLabel: string;
 }
 
@@ -112,12 +115,19 @@ export class DebugPanel {
   }
 
   update(state: DebugPanelState, screenWidth: number, _screenHeight: number): void {
+    const errorLines =
+      state.contentErrors.length > 0
+        ? state.contentErrors.slice(0, 5).map((entry) => `- ${entry}`)
+        : ['- none'];
     this.body.text = [
       `State: ${state.currentStateLabel}`,
       `Run Seed: ${state.runSeed === null ? '-' : state.runSeed}`,
       `Content: ${state.contentStatus}`,
       `Version: ${state.contentVersion}`,
       `Fallback: ${state.fallbackUsed ? 'YES' : 'NO'}`,
+      `Pack: ${state.selectedPackId} -> ${state.loadedPackId}`,
+      'Errors:',
+      ...errorLines,
     ].join('\n');
 
     this.restartButton.setLabel(state.restartButtonLabel);
@@ -132,7 +142,7 @@ export class DebugPanel {
 
   private layout(screenWidth: number, _screenHeight: number): void {
     const width = 280;
-    const height = this.forceCrashButton !== null ? 226 : 184;
+    const height = this.forceCrashButton !== null ? 352 : 310;
     this.root.position.set(Math.max(12, screenWidth - width - 12), 12);
 
     this.bg.clear();
@@ -142,12 +152,12 @@ export class DebugPanel {
 
     this.title.position.set(10, 8);
     this.body.position.set(10, 32);
-    this.status.position.set(10, 132);
+    this.status.position.set(10, 254);
 
-    this.reloadButton.position.set(10, 148);
-    this.restartButton.position.set(80, 148);
+    this.reloadButton.position.set(10, 270);
+    this.restartButton.position.set(80, 270);
     if (this.forceCrashButton !== null) {
-      this.forceCrashButton.position.set(10, 188);
+      this.forceCrashButton.position.set(10, 312);
     }
   }
 

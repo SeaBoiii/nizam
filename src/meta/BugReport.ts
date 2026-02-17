@@ -69,6 +69,8 @@ export interface BugReportV1 {
       };
     };
     content: {
+      selectedPackId: string;
+      loadedPackId: string;
       versions: {
         combined: string;
       };
@@ -145,6 +147,8 @@ export function buildBugReport(input: BuildBugReportInput): BugReportV1 {
       },
       battle,
       content: {
+        selectedPackId: input.context.contentStatus.selectedPackId,
+        loadedPackId: input.context.contentStatus.loadedPackId,
         versions: {
           combined: input.context.contentStatus.contentVersion,
         },
@@ -164,4 +168,3 @@ export function buildBugReport(input: BuildBugReportInput): BugReportV1 {
     recentEvents: input.recentEvents.slice(0, 200),
   };
 }
-

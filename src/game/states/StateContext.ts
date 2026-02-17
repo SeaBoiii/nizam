@@ -2,9 +2,11 @@ import type { Application, Container } from 'pixi.js';
 import type { ArmyState } from '../../meta/Army';
 import type { DifficultyMode } from '../../meta/Difficulty';
 import type { PerkState } from '../../meta/Perks';
+import type { GameSettings } from '../../meta/Settings';
 import type { StatsV1 } from '../../meta/Stats';
 import type { BattleResult, BattleScenario } from '../../meta/types';
 import type { MapState, RunState } from '../../overworld/types';
+import type { ContentLoadStatus, ContentPackManifestEntry } from '../../content/ContentTypes';
 import type { GameEvents } from '../../sim/events/GameEvents';
 
 export type GameStateId = 'TITLE' | 'OVERWORLD' | 'BATTLE' | 'REWARDS' | 'STATS';
@@ -19,6 +21,10 @@ export interface CampaignData {
 export interface StateContext {
   app: Application;
   stage: Container;
+  getSettings(): GameSettings;
+  setContentPack(packId: string): Promise<ContentLoadStatus>;
+  getContentStatus(): ContentLoadStatus;
+  getAvailableContentPacks(): ContentPackManifestEntry[];
   getCampaignData(): CampaignData | null;
   setCampaignData(data: CampaignData | null): void;
   startNewRun(mode?: DifficultyMode): void;

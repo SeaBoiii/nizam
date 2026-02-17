@@ -1,0 +1,255 @@
+{
+  "contentVersion": "1.0.0-community",
+  "objectivePowerScale": {
+    "CAPTURE": 1.0,
+    "ASSASSINATE": 1.0,
+    "HOLDOUT": 0.72,
+    "ESCORT": 0.9,
+    "SIEGE": 1.08
+  },
+  "mapPoolsByNodeType": {
+    "BATTLE": [
+      {
+        "depthMin": 0,
+        "depthMax": 4,
+        "maps": [
+          { "id": "open_field", "weight": 0.65 },
+          { "id": "bridge_crossing", "weight": 0.2 },
+          { "id": "forest_pass", "weight": 0.15 }
+        ]
+      },
+      {
+        "depthMin": 5,
+        "depthMax": 9,
+        "maps": [
+          { "id": "open_field", "weight": 0.35 },
+          { "id": "bridge_crossing", "weight": 0.35 },
+          { "id": "forest_pass", "weight": 0.3 }
+        ]
+      },
+      {
+        "depthMin": 10,
+        "depthMax": 99,
+        "maps": [
+          { "id": "open_field", "weight": 0.2 },
+          { "id": "bridge_crossing", "weight": 0.45 },
+          { "id": "forest_pass", "weight": 0.35 }
+        ]
+      }
+    ],
+    "ELITE": [
+      {
+        "depthMin": 0,
+        "depthMax": 6,
+        "maps": [
+          { "id": "open_field", "weight": 0.3 },
+          { "id": "bridge_crossing", "weight": 0.35 },
+          { "id": "forest_pass", "weight": 0.35 }
+        ]
+      },
+      {
+        "depthMin": 7,
+        "depthMax": 99,
+        "maps": [
+          { "id": "open_field", "weight": 0.18 },
+          { "id": "bridge_crossing", "weight": 0.32 },
+          { "id": "forest_pass", "weight": 0.3 },
+          { "id": "siege_gatehouse", "weight": 0.2 }
+        ]
+      }
+    ],
+    "BOSS": [
+      {
+        "depthMin": 0,
+        "depthMax": 99,
+        "maps": [
+          { "id": "bridge_crossing", "weight": 0.5 },
+          { "id": "forest_pass", "weight": 0.5 }
+        ]
+      }
+    ]
+  },
+  "templatesByNodeType": {
+    "BATTLE": [
+      {
+        "depthMin": 0,
+        "depthMax": 5,
+        "templates": [
+          {
+            "id": "battle_early_a",
+            "squads": [
+              { "archetypeId": "infantry", "tier": 1, "size": 24 },
+              { "archetypeId": "spearmen", "tier": 1, "size": 22 },
+              { "archetypeId": "archers", "tier": 1, "size": 20 }
+            ]
+          },
+          {
+            "id": "battle_early_b",
+            "squads": [
+              { "archetypeId": "infantry", "tier": 1, "size": 26 },
+              { "archetypeId": "cavalry", "tier": 1, "size": 18 },
+              { "archetypeId": "slingers", "tier": 1, "size": 20 }
+            ]
+          }
+        ]
+      },
+      {
+        "depthMin": 6,
+        "depthMax": 10,
+        "templates": [
+          {
+            "id": "battle_mid_a",
+            "squads": [
+              { "archetypeId": "infantry", "tier": 2, "size": 26 },
+              { "archetypeId": "spearmen", "tier": 2, "size": 24 },
+              { "archetypeId": "slingers", "tier": 1, "size": 22 }
+            ]
+          },
+          {
+            "id": "battle_mid_b",
+            "squads": [
+              { "archetypeId": "infantry", "tier": 2, "size": 24 },
+              { "archetypeId": "cavalry", "tier": 2, "size": 20 },
+              { "archetypeId": "slingers", "tier": 2, "size": 22 }
+            ]
+          }
+        ]
+      },
+      {
+        "depthMin": 11,
+        "depthMax": 99,
+        "templates": [
+          {
+            "id": "battle_late_a",
+            "squads": [
+              { "archetypeId": "infantry", "tier": 2, "size": 28 },
+              { "archetypeId": "spearmen", "tier": 3, "size": 24 },
+              { "archetypeId": "slingers", "tier": 2, "size": 24 }
+            ]
+          },
+          {
+            "id": "battle_late_b",
+            "squads": [
+              { "archetypeId": "infantry", "tier": 3, "size": 26 },
+              { "archetypeId": "cavalry", "tier": 3, "size": 20 },
+              { "archetypeId": "slingers", "tier": 2, "size": 24 }
+            ]
+          }
+        ]
+      }
+    ],
+    "ELITE": [
+      {
+        "depthMin": 0,
+        "depthMax": 6,
+        "templates": [
+          {
+            "id": "elite_early_a",
+            "squads": [
+              { "archetypeId": "infantry", "tier": 2, "size": 28 },
+              { "archetypeId": "cavalry", "tier": 2, "size": 22 },
+              { "archetypeId": "archers", "tier": 2, "size": 20 }
+            ]
+          },
+          {
+            "id": "elite_early_b",
+            "squads": [
+              { "archetypeId": "spearmen", "tier": 2, "size": 28 },
+              { "archetypeId": "infantry", "tier": 2, "size": 28 },
+              { "archetypeId": "slingers", "tier": 1, "size": 22 }
+            ]
+          }
+        ]
+      },
+      {
+        "depthMin": 7,
+        "depthMax": 99,
+        "templates": [
+          {
+            "id": "elite_late_a",
+            "squads": [
+              { "archetypeId": "infantry", "tier": 3, "size": 30 },
+              { "archetypeId": "cavalry", "tier": 3, "size": 24 },
+              { "archetypeId": "slingers", "tier": 2, "size": 22 }
+            ]
+          },
+          {
+            "id": "elite_late_b",
+            "squads": [
+              { "archetypeId": "spearmen", "tier": 3, "size": 30 },
+              { "archetypeId": "infantry", "tier": 3, "size": 28 },
+              { "archetypeId": "archers", "tier": 3, "size": 22 }
+            ]
+          }
+        ]
+      }
+    ],
+    "BOSS": [
+      {
+        "depthMin": 0,
+        "depthMax": 99,
+        "templates": [
+          {
+            "id": "boss_a",
+            "squads": [
+              { "archetypeId": "infantry", "tier": 3, "size": 38 },
+              { "archetypeId": "cavalry", "tier": 3, "size": 28 },
+              { "archetypeId": "spearmen", "tier": 3, "size": 34 }
+            ]
+          },
+          {
+            "id": "boss_b",
+            "squads": [
+              { "archetypeId": "infantry", "tier": 3, "size": 36 },
+              { "archetypeId": "archers", "tier": 3, "size": 30 },
+              { "archetypeId": "cavalry", "tier": 3, "size": 26 }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "siegeTemplates": [
+    {
+      "depthMin": 0,
+      "depthMax": 6,
+      "templates": [
+        {
+          "id": "siege_early_a",
+          "squads": [
+            { "archetypeId": "infantry", "tier": 2, "size": 30 },
+            { "archetypeId": "infantry", "tier": 2, "size": 28 },
+            { "archetypeId": "spearmen", "tier": 2, "size": 26 },
+            { "archetypeId": "archers", "tier": 2, "size": 24 }
+          ]
+        }
+      ]
+    },
+    {
+      "depthMin": 7,
+      "depthMax": 99,
+      "templates": [
+        {
+          "id": "siege_late_a",
+          "squads": [
+            { "archetypeId": "infantry", "tier": 3, "size": 34 },
+            { "archetypeId": "infantry", "tier": 3, "size": 30 },
+            { "archetypeId": "spearmen", "tier": 3, "size": 28 },
+            { "archetypeId": "archers", "tier": 2, "size": 26 },
+            { "archetypeId": "cavalry", "tier": 2, "size": 18 }
+          ]
+        },
+        {
+          "id": "siege_late_b",
+          "squads": [
+            { "archetypeId": "infantry", "tier": 3, "size": 32 },
+            { "archetypeId": "spearmen", "tier": 3, "size": 30 },
+            { "archetypeId": "archers", "tier": 3, "size": 26 },
+            { "archetypeId": "archers", "tier": 2, "size": 22 },
+            { "archetypeId": "cavalry", "tier": 2, "size": 20 }
+          ]
+        }
+      ]
+    }
+  ]
+}

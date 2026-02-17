@@ -1,6 +1,7 @@
 import { Application } from 'pixi.js';
 import { contentManager } from './content/ContentManager';
 import { Game } from './game/Game';
+import { loadSettings } from './meta/Settings';
 import './styles.css';
 
 async function bootstrap(): Promise<void> {
@@ -17,7 +18,8 @@ async function bootstrap(): Promise<void> {
   }
 
   mount.appendChild(app.canvas);
-  await contentManager.loadAll();
+  const settings = loadSettings();
+  await contentManager.loadAllForPack(settings.contentPackId);
   new Game(app);
 }
 

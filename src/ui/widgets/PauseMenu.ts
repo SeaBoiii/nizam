@@ -104,7 +104,11 @@ export class PauseMenu {
       label: 'Reset Defaults',
       width: 180,
       onClick: () => {
-        this.onSettingsChanged(getDefaultSettings());
+        const current = this.getSettings();
+        this.onSettingsChanged({
+          ...getDefaultSettings(),
+          contentPackId: current.contentPackId,
+        });
         this.refreshSettingsText();
       },
     });

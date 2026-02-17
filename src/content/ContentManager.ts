@@ -1,7 +1,11 @@
-import type {
+﻿import type {
   BattleMapContent,
   ContentFileName,
+  ContentPackLoadResult,
+  ContentPackManifestEntry,
+  ContentPacksManifest,
   ContentLoadStatus,
+  ContentVersions,
   MapsContent,
   LoadedContent,
   NodeDepthWeightsContent,
@@ -970,120 +974,271 @@ function isValidMapsContent(value: unknown): value is MapsContent {
 
 type Validator<T> = (value: unknown) => value is T;
 
+const DEFAULT_PACKS: ContentPacksManifest = {
+  version: 'packs_v1',
+  packs: [{ id: 'base', name: 'Base', desc: 'Default balance and content.' }],
+};
+
+function cloneSourceByFile(source: 'json' | 'default'): ContentLoadStatus['sourceByFile'] {
+  return {
+    units: source,
+    upgrades: source,
+    perks: source,
+    objectives: source,
+    nodes: source,
+    scenarios: source,
+    maps: source,
+  };
+}
+
+function clonePacksManifest(manifest: ContentPacksManifest): ContentPacksManifest {
+  return {
+    version: manifest.version,
+    packs: manifest.packs.map((pack) => ({
+      id: pack.id,
+      name: pack.name,
+      desc: pack.desc,
+    })),
+  };
+}
+
+function isValidPacksManifest(value: unknown): value is ContentPacksManifest {
+  const candidate = asObject(value);
+  if (!candidate || typeof candidate.version !== 'string' || !Array.isArray(candidate.packs)) {
+    return false;
+  }
+  if (candidate.packs.length === 0) {
+    return false;
+  }
+  for (let i = 0; i < candidate.packs.length; i += 1) {
+    const pack = asObject(candidate.packs[i]);
+    if (
+      !pack ||
+      typeof pack.id !== 'string' ||
+      pack.id.trim().length === 0 ||
+      typeof pack.name !== 'string' ||
+      pack.name.trim().length === 0 ||
+      typeof pack.desc !== 'string'
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function resolveVersions(content: LoadedContent): ContentVersions {
+  return {
+    unitsVersion: content.units.contentVersion,
+    upgradesVersion: content.upgrades.contentVersion,
+    perksVersion: content.perks.version,
+    objectivesVersion: content.objectives.contentVersion,
+    nodesVersion: content.nodes.contentVersion,
+    scenariosVersion: content.scenarios.contentVersion,
+    mapsVersion: content.maps.version,
+  };
+}
+
+function cloneVersions(versions: ContentVersions): ContentVersions {
+  return { ...versions };
+}
+
+function validateCrossReferences(content: LoadedContent): string[] {
+  const errors: string[] = [];
+  const unitIds = new Set<string>();
+  for (let i = 0; i < content.units.units.length; i += 1) {
+    unitIds.add(content.units.units[i].id);
+  }
+  const mapIds = new Set<string>();
+  for (let i = 0; i < content.maps.maps.length; i += 1) {
+    mapIds.add(content.maps.maps[i].id);
+  }
+
+  if (!unitIds.has(content.units.fallbackArchetypeId)) {
+    errors.push(`fallbackArchetypeId '${content.units.fallbackArchetypeId}' is missing in units.json.`);
+  }
+
+  for (let i = 0; i < content.units.startingArmy.squads.length; i += 1) {
+    const squad = content.units.startingArmy.squads[i];
+    if (!unitIds.has(squad.archetypeId)) {
+      errors.push(`startingArmy squad ${i} references missing archetype '${squad.archetypeId}'.`);
+    }
+  }
+
+  const upgradeIds = Object.keys(content.upgrades.paths);
+  for (let i = 0; i < upgradeIds.length; i += 1) {
+    if (!unitIds.has(upgradeIds[i])) {
+      errors.push(`upgrades.paths references missing archetype '${upgradeIds[i]}'.`);
+    }
+  }
+
+  const validateTemplateList = (templates: ScenarioDepthBucketContent[], bucketLabel: string): void => {
+    for (let i = 0; i < templates.length; i += 1) {
+      const bucket = templates[i];
+      for (let j = 0; j < bucket.templates.length; j += 1) {
+        const template = bucket.templates[j];
+        for (let k = 0; k < template.squads.length; k += 1) {
+          const squad = template.squads[k];
+          if (!unitIds.has(squad.archetypeId)) {
+            errors.push(`${bucketLabel} template '${template.id}' references missing archetype '${squad.archetypeId}'.`);
+          }
+        }
+      }
+    }
+  };
+
+  validateTemplateList(content.scenarios.templatesByNodeType.BATTLE, 'BATTLE');
+  validateTemplateList(content.scenarios.templatesByNodeType.ELITE, 'ELITE');
+  validateTemplateList(content.scenarios.templatesByNodeType.BOSS, 'BOSS');
+  validateTemplateList(content.scenarios.siegeTemplates, 'SIEGE');
+
+  const validateMapPools = (pools: ScenariosContent['mapPoolsByNodeType']['BATTLE'], nodeType: string): void => {
+    for (let i = 0; i < pools.length; i += 1) {
+      for (let j = 0; j < pools[i].maps.length; j += 1) {
+        const entry = pools[i].maps[j];
+        if (!mapIds.has(entry.id)) {
+          errors.push(`${nodeType} map pool references missing map '${entry.id}'.`);
+        }
+      }
+    }
+  };
+
+  validateMapPools(content.scenarios.mapPoolsByNodeType.BATTLE, 'BATTLE');
+  validateMapPools(content.scenarios.mapPoolsByNodeType.ELITE, 'ELITE');
+  validateMapPools(content.scenarios.mapPoolsByNodeType.BOSS, 'BOSS');
+
+  for (let i = 0; i < content.objectives.holdout.waveArchetypes.length; i += 1) {
+    const archetypeId = content.objectives.holdout.waveArchetypes[i];
+    if (!unitIds.has(archetypeId)) {
+      errors.push(`holdout.waveArchetypes references missing archetype '${archetypeId}'.`);
+    }
+  }
+
+  return errors;
+}
+
+interface PackLoadAttempt {
+  ok: boolean;
+  content: LoadedContent | null;
+  errors: string[];
+}
+
 export class ContentManager {
   private content: LoadedContent = cloneLoadedContent(DEFAULT_CONTENT);
+  private packsManifest: ContentPacksManifest = clonePacksManifest(DEFAULT_PACKS);
+  private manifestErrors: string[] = [];
+  private manifestLoaded = false;
+  private selectedPackId = 'base';
+  private loadedPackId = 'base';
   private status: ContentLoadStatus = {
-      loaded: false,
-      fallbackUsed: false,
-      contentVersion: DEFAULT_CONTENT.units.contentVersion,
-      errors: [],
-      sourceByFile: {
-        units: 'default',
-        upgrades: 'default',
-        perks: 'default',
-        objectives: 'default',
-        nodes: 'default',
-        scenarios: 'default',
-        maps: 'default',
-      },
-    };
+    loaded: false,
+    fallbackUsed: false,
+    contentVersion: DEFAULT_CONTENT.units.contentVersion,
+    errors: [],
+    sourceByFile: cloneSourceByFile('default'),
+    selectedPackId: 'base',
+    loadedPackId: 'base',
+    selectedPackName: 'Base',
+    loadedPackName: 'Base',
+    versions: resolveVersions(DEFAULT_CONTENT),
+    packManifestVersion: DEFAULT_PACKS.version,
+  };
   private readonly listeners = new Set<() => void>();
 
   async loadAll(options: LoadOptions = {}): Promise<ContentLoadStatus> {
+    await this.loadAllForPack(this.selectedPackId, options);
+    return this.getStatus();
+  }
+
+  async loadAllForPack(packId: string, options: LoadOptions = {}): Promise<ContentPackLoadResult> {
+    const requestedPackId = typeof packId === 'string' && packId.trim().length > 0 ? packId.trim() : 'base';
     const forceReload = options.forceReload === true;
-    const errors: string[] = [];
-    const sourceByFile: ContentLoadStatus['sourceByFile'] = {
-      units: 'json',
-      upgrades: 'json',
-      perks: 'json',
-      objectives: 'json',
-      nodes: 'json',
-      scenarios: 'json',
-      maps: 'json',
-    };
 
-    const units = await this.loadFile('units', isValidUnitsContent, cloneUnitsContent(DEFAULT_UNITS_CONTENT), forceReload, errors);
-    if (units.source === 'default') {
-      sourceByFile.units = 'default';
-    }
-    const upgrades = await this.loadFile(
-      'upgrades',
-      isValidUpgradesContent,
-      cloneUpgradesContent(DEFAULT_UPGRADES_CONTENT),
-      forceReload,
-      errors,
-    );
-    if (upgrades.source === 'default') {
-      sourceByFile.upgrades = 'default';
-    }
-    const perks = await this.loadFile('perks', isValidPerksContent, clonePerksContent(DEFAULT_PERKS_CONTENT), forceReload, errors);
-    if (perks.source === 'default') {
-      sourceByFile.perks = 'default';
-    }
-    const objectives = await this.loadFile(
-      'objectives',
-      isValidObjectivesContent,
-      cloneObjectivesContent(DEFAULT_OBJECTIVES_CONTENT),
-      forceReload,
-      errors,
-    );
-    if (objectives.source === 'default') {
-      sourceByFile.objectives = 'default';
-    }
-    const nodes = await this.loadFile('nodes', isValidNodesContent, cloneNodesContent(DEFAULT_NODES_CONTENT), forceReload, errors);
-    if (nodes.source === 'default') {
-      sourceByFile.nodes = 'default';
-    }
-    const scenarios = await this.loadFile(
-      'scenarios',
-      isValidScenariosContent,
-      cloneScenariosContent(DEFAULT_SCENARIOS_CONTENT),
-      forceReload,
-      errors,
-    );
-    if (scenarios.source === 'default') {
-      sourceByFile.scenarios = 'default';
-    }
-    const maps = await this.loadFile('maps', isValidMapsContent, cloneMapsContent(DEFAULT_MAPS_CONTENT), forceReload, errors);
-    if (maps.source === 'default') {
-      sourceByFile.maps = 'default';
+    if (!forceReload && this.status.loaded && requestedPackId === this.selectedPackId) {
+      return this.buildLoadResult(this.loadedPackId !== 'embedded');
     }
 
-    this.content = {
-      units: units.value,
-      upgrades: upgrades.value,
-      perks: perks.value,
-      objectives: objectives.value,
-      nodes: nodes.value,
-      scenarios: scenarios.value,
-      maps: maps.value,
-    };
+    this.selectedPackId = requestedPackId;
+    await this.loadPackManifest(forceReload);
 
-    const fallbackUsed =
-      sourceByFile.units === 'default' ||
-      sourceByFile.upgrades === 'default' ||
-      sourceByFile.perks === 'default' ||
-      sourceByFile.objectives === 'default' ||
-      sourceByFile.nodes === 'default' ||
-      sourceByFile.scenarios === 'default' ||
-      sourceByFile.maps === 'default';
+    const errors = [...this.manifestErrors];
+    const selectedPack = this.findPack(requestedPackId);
+    const selectedPackName = selectedPack ? selectedPack.name : `${requestedPackId} (missing)`;
+    let fallbackUsed = false;
 
+    if (!selectedPack) {
+      errors.push(`Pack '${requestedPackId}' not found in mods/packs.json. Falling back to 'base'.`);
+      fallbackUsed = true;
+    }
+
+    let loadedContent: LoadedContent | null = null;
+    let loadedPackId = selectedPack ? selectedPack.id : 'base';
+    let loadedPackName = selectedPack ? selectedPack.name : this.resolvePackName('base');
+    let sourceByFile: ContentLoadStatus['sourceByFile'] = cloneSourceByFile('default');
+
+    let selectedAttempt: PackLoadAttempt | null = null;
+    if (selectedPack !== null) {
+      selectedAttempt = await this.tryLoadPack(selectedPack.id, forceReload);
+      errors.push(...selectedAttempt.errors);
+      if (selectedAttempt.ok && selectedAttempt.content !== null) {
+        loadedContent = selectedAttempt.content;
+        sourceByFile = cloneSourceByFile('json');
+      } else {
+        fallbackUsed = true;
+      }
+    }
+
+    if (loadedContent === null && requestedPackId !== 'base') {
+      const baseAttempt = await this.tryLoadPack('base', forceReload);
+      errors.push(...baseAttempt.errors);
+      if (baseAttempt.ok && baseAttempt.content !== null) {
+        loadedContent = baseAttempt.content;
+        loadedPackId = 'base';
+        loadedPackName = this.resolvePackName('base');
+        sourceByFile = cloneSourceByFile('json');
+      } else {
+        errors.push('Base pack failed validation. Using embedded defaults.');
+      }
+    }
+
+    if (loadedContent === null && requestedPackId === 'base' && selectedAttempt !== null && !selectedAttempt.ok) {
+      errors.push('Base pack failed validation. Using embedded defaults.');
+    }
+
+    if (loadedContent === null) {
+      loadedContent = cloneLoadedContent(DEFAULT_CONTENT);
+      loadedPackId = 'embedded';
+      loadedPackName = 'Embedded Defaults';
+      sourceByFile = cloneSourceByFile('default');
+      fallbackUsed = true;
+    }
+
+    this.loadedPackId = loadedPackId;
+    this.content = loadedContent;
+
+    const uniqueErrors = Array.from(new Set(errors));
+    const versions = resolveVersions(loadedContent);
     this.status = {
       loaded: true,
-      fallbackUsed,
+      fallbackUsed: fallbackUsed || loadedPackId !== requestedPackId || loadedPackId === 'embedded',
       contentVersion: this.resolveContentVersion(),
-      errors,
+      errors: uniqueErrors,
       sourceByFile,
+      selectedPackId: requestedPackId,
+      loadedPackId,
+      selectedPackName,
+      loadedPackName,
+      versions,
+      packManifestVersion: this.packsManifest.version,
     };
 
-    if (errors.length > 0) {
-      for (let i = 0; i < errors.length; i += 1) {
-        console.error(`[ContentManager] ${errors[i]}`);
+    if (uniqueErrors.length > 0) {
+      for (let i = 0; i < uniqueErrors.length; i += 1) {
+        console.error(`[ContentManager] ${uniqueErrors[i]}`);
       }
     }
 
     this.emitChange();
-    return this.getStatus();
+    return this.buildLoadResult(loadedPackId !== 'embedded');
   }
 
   getStatus(): ContentLoadStatus {
@@ -1093,7 +1248,25 @@ export class ContentManager {
       contentVersion: this.status.contentVersion,
       errors: [...this.status.errors],
       sourceByFile: { ...this.status.sourceByFile },
+      selectedPackId: this.status.selectedPackId,
+      loadedPackId: this.status.loadedPackId,
+      selectedPackName: this.status.selectedPackName,
+      loadedPackName: this.status.loadedPackName,
+      versions: cloneVersions(this.status.versions),
+      packManifestVersion: this.status.packManifestVersion,
     };
+  }
+
+  getAvailablePacks(): ContentPackManifestEntry[] {
+    return this.packsManifest.packs.map((pack) => ({
+      id: pack.id,
+      name: pack.name,
+      desc: pack.desc,
+    }));
+  }
+
+  getLoadedPackId(): string {
+    return this.loadedPackId;
   }
 
   onDidReload(listener: () => void): () => void {
@@ -1265,6 +1438,16 @@ export class ContentManager {
     return Math.max(16, this.content.maps.nav.cellSize);
   }
 
+  private buildLoadResult(ok: boolean): ContentPackLoadResult {
+    return {
+      ok,
+      usingFallback: this.status.fallbackUsed,
+      loadedPackId: this.status.loadedPackId,
+      errors: [...this.status.errors],
+      versions: cloneVersions(this.status.versions),
+    };
+  }
+
   private resolveContentVersion(): string {
     const first =
       this.content.units.contentVersion ||
@@ -1286,6 +1469,21 @@ export class ContentManager {
     return null;
   }
 
+  private findPack(packId: string): ContentPackManifestEntry | null {
+    for (let i = 0; i < this.packsManifest.packs.length; i += 1) {
+      const pack = this.packsManifest.packs[i];
+      if (pack.id === packId) {
+        return pack;
+      }
+    }
+    return null;
+  }
+
+  private resolvePackName(packId: string): string {
+    const pack = this.findPack(packId);
+    return pack ? pack.name : packId;
+  }
+
   private normalizeTier(tier: number): 1 | 2 | 3 {
     const clamped = Math.max(1, Math.min(this.getMaxTier(), Math.floor(tier)));
     if (clamped <= 1) {
@@ -1303,46 +1501,131 @@ export class ContentManager {
     }
   }
 
-  private async loadFile<T>(
-    fileName: ContentFileName,
-    validator: Validator<T>,
-    defaultValue: T,
-    forceReload: boolean,
-    errors: string[],
-  ): Promise<{ value: T; source: 'json' | 'default' }> {
+  private async loadPackManifest(forceReload: boolean): Promise<void> {
+    if (this.manifestLoaded && !forceReload) {
+      return;
+    }
+
+    const errors: string[] = [];
     const baseUrl = import.meta.env.BASE_URL;
     const suffix = forceReload ? `?ts=${Date.now()}` : '';
-    const path = `${baseUrl}content/${fileName}.json${suffix}`;
+    const path = `${baseUrl}mods/packs.json${suffix}`;
 
     try {
       const response = await fetch(path, { cache: forceReload ? 'no-store' : 'default' });
       if (!response.ok) {
-        errors.push(`${fileName}.json request failed (${response.status}) - using defaults.`);
-        return {
-          value: defaultValue,
-          source: 'default',
-        };
+        errors.push(`mods/packs.json request failed (${response.status}). Using built-in pack list.`);
+      } else {
+        const parsed = (await response.json()) as unknown;
+        if (isValidPacksManifest(parsed)) {
+          this.packsManifest = clonePacksManifest(parsed);
+        } else {
+          errors.push('mods/packs.json failed schema validation. Using built-in pack list.');
+        }
+      }
+    } catch (error) {
+      errors.push(`mods/packs.json load error (${String(error)}). Using built-in pack list.`);
+    }
+
+    if (errors.length > 0) {
+      this.packsManifest = clonePacksManifest(DEFAULT_PACKS);
+      for (let i = 0; i < errors.length; i += 1) {
+        console.error(`[ContentManager] ${errors[i]}`);
+      }
+    }
+
+    let hasBase = false;
+    for (let i = 0; i < this.packsManifest.packs.length; i += 1) {
+      if (this.packsManifest.packs[i].id === 'base') {
+        hasBase = true;
+        break;
+      }
+    }
+    if (!hasBase) {
+      this.packsManifest.packs.unshift({ id: 'base', name: 'Base', desc: 'Default balance and content.' });
+      errors.push("Pack manifest missing 'base'. Added built-in base fallback.");
+    }
+
+    this.manifestErrors = errors;
+    this.manifestLoaded = true;
+  }
+
+  private async tryLoadPack(packId: string, forceReload: boolean): Promise<PackLoadAttempt> {
+    const errors: string[] = [];
+    const units = await this.loadFileFromPack('units', isValidUnitsContent, packId, forceReload, errors);
+    const upgrades = await this.loadFileFromPack('upgrades', isValidUpgradesContent, packId, forceReload, errors);
+    const perks = await this.loadFileFromPack('perks', isValidPerksContent, packId, forceReload, errors);
+    const objectives = await this.loadFileFromPack('objectives', isValidObjectivesContent, packId, forceReload, errors);
+    const nodes = await this.loadFileFromPack('nodes', isValidNodesContent, packId, forceReload, errors);
+    const scenarios = await this.loadFileFromPack('scenarios', isValidScenariosContent, packId, forceReload, errors);
+    const maps = await this.loadFileFromPack('maps', isValidMapsContent, packId, forceReload, errors);
+
+    if (units === null || upgrades === null || perks === null || objectives === null || nodes === null || scenarios === null || maps === null) {
+      return {
+        ok: false,
+        content: null,
+        errors,
+      };
+    }
+
+    const content: LoadedContent = {
+      units,
+      upgrades,
+      perks,
+      objectives,
+      nodes,
+      scenarios,
+      maps,
+    };
+
+    const crossReferenceErrors = validateCrossReferences(content);
+    for (let i = 0; i < crossReferenceErrors.length; i += 1) {
+      errors.push(`[${packId}] ${crossReferenceErrors[i]}`);
+    }
+
+    if (crossReferenceErrors.length > 0) {
+      return {
+        ok: false,
+        content: null,
+        errors,
+      };
+    }
+
+    return {
+      ok: true,
+      content: cloneLoadedContent(content),
+      errors,
+    };
+  }
+
+  private async loadFileFromPack<T>(
+    fileName: ContentFileName,
+    validator: Validator<T>,
+    packId: string,
+    forceReload: boolean,
+    errors: string[],
+  ): Promise<T | null> {
+    const baseUrl = import.meta.env.BASE_URL;
+    const suffix = forceReload ? `?ts=${Date.now()}` : '';
+    const path = `${baseUrl}mods/${packId}/${fileName}.json${suffix}`;
+
+    try {
+      const response = await fetch(path, { cache: forceReload ? 'no-store' : 'default' });
+      if (!response.ok) {
+        errors.push(`[${packId}] ${fileName}.json request failed (${response.status}).`);
+        return null;
       }
 
       const parsed = (await response.json()) as unknown;
       if (!validator(parsed)) {
-        errors.push(`${fileName}.json failed schema validation - using defaults.`);
-        return {
-          value: defaultValue,
-          source: 'default',
-        };
+        errors.push(`[${packId}] ${fileName}.json failed schema validation.`);
+        return null;
       }
 
-      return {
-        value: parsed,
-        source: 'json',
-      };
+      return parsed;
     } catch (error) {
-      errors.push(`${fileName}.json load error (${String(error)}) - using defaults.`);
-      return {
-        value: defaultValue,
-        source: 'default',
-      };
+      errors.push(`[${packId}] ${fileName}.json load error (${String(error)}).`);
+      return null;
     }
   }
 }

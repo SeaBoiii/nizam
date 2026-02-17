@@ -443,6 +443,7 @@ export class OverworldState implements IGameState {
       `Recruits: ${campaign.armyState.recruits}`,
       `Current Node: ${currentType}`,
       `Mode: ${campaign.runState.difficultyMode}`,
+      `Pack: ${contentManager.getStatus().loadedPackName}`,
       `Tier: ${campaign.runState.difficultyTier}`,
     ].join('    ');
 

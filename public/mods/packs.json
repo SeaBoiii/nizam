@@ -1,0 +1,15 @@
+﻿{
+  "version": "packs_v1",
+  "packs": [
+    {
+      "id": "base",
+      "name": "Base",
+      "desc": "Default balance and content."
+    },
+    {
+      "id": "community",
+      "name": "Community Pack",
+      "desc": "Experimental balance with more pressure objectives and earlier slingers."
+    }
+  ]
+}

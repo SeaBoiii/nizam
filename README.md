@@ -65,29 +65,37 @@ REPO_NAME=your-repo-name npm run build
 
 On GitHub Actions, `REPO_NAME` is set automatically from `${{ github.event.repository.name }}`.
 
-## Data-driven content (Sprint 5.1)
+## Data-driven content (Sprint 5.1+)
 
-Gameplay tuning is loaded from JSON files at startup:
+Gameplay tuning is loaded from JSON content packs.
 
-- `public/content/units.json`
-- `public/content/upgrades.json`
-- `public/content/perks.json`
-- `public/content/objectives.json`
-- `public/content/nodes.json`
-- `public/content/scenarios.json`
-- `public/content/maps.json`
+Default pack files now live in:
+
+- `public/mods/base/units.json`
+- `public/mods/base/upgrades.json`
+- `public/mods/base/perks.json`
+- `public/mods/base/objectives.json`
+- `public/mods/base/nodes.json`
+- `public/mods/base/scenarios.json`
+- `public/mods/base/maps.json`
+
+Pack selection manifest:
+
+- `public/mods/packs.json`
 
 The loader uses Vite base-aware paths:
 
-- `${import.meta.env.BASE_URL}content/*.json`
+- `${import.meta.env.BASE_URL}mods/<packId>/*.json`
 
 So GitHub Pages pathing under `/nizam/` works correctly.
 
-If a content file is missing or invalid, the game falls back to built-in defaults and logs errors to console. In dev mode, a small HUD warning is shown when fallback is active.
+If a selected pack is missing/invalid, the loader falls back to `base`. If `base` fails too, it falls back to embedded TypeScript defaults. Fallbacks are non-fatal and shown in UI/debug.
+
+`public/content/*.json` is kept as a legacy compatibility copy.
 
 ## Terrain + Chokepoints (Sprint 9A)
 
-- Battles now load handcrafted maps from `public/content/maps.json`.
+- Battles now load handcrafted maps from `public/mods/base/maps.json`.
 - Terrain types:
   - `OBSTACLE_RECT`: impassable blocks (units route around, cannot pass through).
   - `GATE_RECT`: siege gate obstacle (closed at start, opens during Siege stage transition).
@@ -101,7 +109,7 @@ If a content file is missing or invalid, the game falls back to built-in default
   - `bridge_crossing`
   - `forest_pass`
   - `siege_gatehouse`
-- Map selection is deterministic per node and seed, using scenario content pools in `public/content/scenarios.json`.
+- Map selection is deterministic per node and seed, using scenario content pools in `public/mods/base/scenarios.json`.
 - Terrain overlays are rendered in-battle and minimap shows obstacle silhouettes.
 
 ## Campaign loop
@@ -118,7 +126,7 @@ If a content file is missing or invalid, the game falls back to built-in default
 ## Anti-frustration rules (Sprint 12.3)
 
 - Losing a non-boss battle now grants consolation rewards and the run continues:
-  - gold/recruits are scaled from normal node rewards using `lossProtection` tuning in `public/content/nodes.json`
+  - gold/recruits are scaled from normal node rewards using `lossProtection` tuning in `public/mods/base/nodes.json`
   - supplies gain uses a flat value from the same tuning block
   - consecutive losses apply a capped multiplier boost to consolation gold/recruits
 - Boss defeat ends the run and returns to title from rewards.
@@ -131,6 +139,7 @@ If a content file is missing or invalid, the game falls back to built-in default
 ## Controls
 
 - Title: click `New Run`, `Continue`, `Reset Save`, `Stats`
+- Title: choose `Content Pack` with `<` / `>` before starting or continuing
 - Title: pick `Normal` or `Hard` before `New Run`
 - Overworld: left click connected nodes to advance, click `Back To Title` to return
 - Battle camera pan: `WASD` or Arrow keys
@@ -153,7 +162,7 @@ If a content file is missing or invalid, the game falls back to built-in default
 
 ## Perks + Difficulty (Sprint 6)
 
-- A commander perk draft appears every `N` cleared battle nodes (default: every 3), configured in `public/content/perks.json`.
+- A commander perk draft appears every `N` cleared battle nodes (default: every 3), configured in `public/mods/base/perks.json`.
 - Perk choices are deterministic from run seed + progression count.
 - Picked perks persist in save data and apply to player-side battle systems:
   - morale/rout behavior
@@ -230,30 +239,59 @@ If a content file is missing or invalid, the game falls back to built-in default
 
 ## Siege mode (Sprint 10)
 
-- Added iconic siege map: `siege_gatehouse` in `public/content/maps.json`.
+- Added iconic siege map: `siege_gatehouse` in `public/mods/base/maps.json`.
 - Gate mechanic:
   - Gate terrain uses `GATE_RECT` with id `main_gate`.
   - Closed gate blocks movement/nav until Stage 1 is captured.
   - On gate open, nav grid rebuilds and squad flow-fields refresh so units re-route through the breach.
-- Siege objective tuning lives in `public/content/objectives.json` under `siege`:
+- Siege objective tuning lives in `public/mods/base/objectives.json` under `siege`:
   - `timeLimitSeconds`
   - `gateCaptureRate`
   - `courtyardCaptureRate`
   - `contestedDecayRate`
   - `opposingProgressDrainFactor`
   - `eliteDepthMin` / `eliteChance` (late-elite appearance tuning)
-- Siege enemy compositions are data-driven in `public/content/scenarios.json` under `siegeTemplates`.
+- Siege enemy compositions are data-driven in `public/mods/base/scenarios.json` under `siegeTemplates`.
 
 ## Debug panel
 
 Use `F1` or `` ` `` to toggle.
 
-- Shows content load status (`OK` or fallback), current run seed, and content version.
+- Shows content load status (`OK` or fallback), selected/loaded pack id, current run seed, content version, and first content errors.
 - `Reload Content` re-fetches all JSON content files.
 - `Restart Current Battle` appears during battle.
 - `Restart Run` appears outside battle.
 
 After content reload, restart battle/run to apply changes to newly spawned units/scenarios.
+
+## Mod packs (Sprint 14)
+
+- Content packs are selected on the Title screen.
+- Selected pack id is stored in settings (`nizam_settings_v1`) as `contentPackId`.
+- Example packs included:
+  - `base`
+  - `community`
+- Overworld top bar shows the currently loaded pack name.
+- If selected pack validation fails, the game automatically falls back to `base` and shows a clear warning.
+
+To add a new pack:
+
+1. Create `public/mods/<yourPackId>/`.
+2. Copy required files from `public/mods/base/`.
+3. Edit values.
+4. Add your pack metadata to `public/mods/packs.json`.
+
+See `MODDING.md` for a compact workflow and schema examples.
+
+Required files per pack:
+
+- `units.json`
+- `upgrades.json`
+- `objectives.json`
+- `nodes.json`
+- `scenarios.json`
+- `maps.json`
+- `perks.json`
 
 ## Ranged combat (Sprint 2)
 
@@ -266,14 +304,14 @@ After content reload, restart battle/run to apply changes to newly spawned units
 
 ## Slingers + Suppression (Sprint 13.1)
 
-- Added `Slingers` archetype (data-driven in `public/content/units.json`).
+- Added `Slingers` archetype (data-driven in `public/mods/base/units.json`).
 - Slingers fire real `stone` projectiles with heavier arc than arrows.
 - Stone hits apply morale suppression on impact with a per-squad per-second cap to prevent instant rout chains.
-- Suppression tuning is in `public/content/objectives.json` under `suppression`:
+- Suppression tuning is in `public/mods/base/objectives.json` under `suppression`:
   - `stoneMoraleDamage`
   - `stoneMoraleDamageOnShieldFrontMult`
   - `maxSuppressionPerSecondPerSquad`
-- Mid/late enemy templates now include slingers via `public/content/scenarios.json`.
+- Mid/late enemy templates now include slingers via `public/mods/base/scenarios.json`.
 
 ## Overworld node types
 

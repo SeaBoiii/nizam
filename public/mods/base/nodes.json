@@ -1,0 +1,88 @@
+{
+  "contentVersion": "1.0.0",
+  "mapGeneration": {
+    "minNodes": 18,
+    "maxNodes": 24,
+    "layerCountMin": 5,
+    "layerCountMax": 6,
+    "middleLayerMin": 3,
+    "middleLayerMax": 5,
+    "middleLayerCap": 6,
+    "linkExtraChance": 0.35,
+    "nodeJitterY": 18
+  },
+  "nodeTypeWeightsByDepth": [
+    {
+      "depthMin": 0,
+      "depthMax": 3,
+      "weights": { "BATTLE": 0.54, "SHOP": 0.16, "RECRUIT": 0.13, "REST": 0.13, "ELITE": 0.04 }
+    },
+    {
+      "depthMin": 4,
+      "depthMax": 8,
+      "weights": { "BATTLE": 0.5, "SHOP": 0.12, "RECRUIT": 0.12, "REST": 0.12, "ELITE": 0.14 }
+    },
+    {
+      "depthMin": 9,
+      "depthMax": 99,
+      "weights": { "BATTLE": 0.46, "SHOP": 0.1, "RECRUIT": 0.1, "REST": 0.1, "ELITE": 0.24 }
+    }
+  ],
+  "rewardsByNodeType": {
+    "BATTLE": {
+      "gold": { "min": 30, "max": 52 },
+      "recruits": { "min": 5, "max": 10 },
+      "supplies": { "min": 0, "max": 2 }
+    },
+    "SHOP": {
+      "gold": { "min": 0, "max": 0 },
+      "recruits": { "min": 0, "max": 0 },
+      "supplies": { "min": 0, "max": 0 }
+    },
+    "RECRUIT": {
+      "gold": { "min": 0, "max": 0 },
+      "recruits": { "min": 7, "max": 14 },
+      "supplies": { "min": 0, "max": 0 }
+    },
+    "REST": {
+      "gold": { "min": 0, "max": 0 },
+      "recruits": { "min": 0, "max": 0 },
+      "supplies": { "min": 8, "max": 16 }
+    },
+    "ELITE": {
+      "gold": { "min": 45, "max": 70 },
+      "recruits": { "min": 8, "max": 13 },
+      "supplies": { "min": 1, "max": 4 }
+    },
+    "BOSS": {
+      "gold": { "min": 60, "max": 80 },
+      "recruits": { "min": 10, "max": 15 },
+      "supplies": { "min": 2, "max": 6 }
+    }
+  },
+  "shop": {
+    "sizeUpgradeCost": 35,
+    "sizeUpgradeAmount": 5,
+    "suppliesCost": 22,
+    "suppliesAmount": 20
+  },
+  "recruit": {
+    "baseRecruits": 9,
+    "recruitsPerDifficulty": 2,
+    "recruitsBonusCap": 6,
+    "discountHireCost": 15,
+    "discountSizeMin": 18,
+    "discountSizeMax": 22
+  },
+  "rest": {
+    "suppliesGain": 12,
+    "restBonusBattles": 1
+  },
+  "lossProtection": {
+    "enabled": true,
+    "goldPctOfNormalReward": 0.6,
+    "recruitsPctOfNormalReward": 0.8,
+    "suppliesFlat": 10,
+    "maxConsecutiveLossBoost": 2
+  }
+}

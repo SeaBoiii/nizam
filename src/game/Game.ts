@@ -1,6 +1,7 @@
 import { Application, Text } from 'pixi.js';
 import { audioManager } from '../audio/AudioManager';
 import { contentManager } from '../content/ContentManager';
+import type { ContentLoadStatus } from '../content/ContentTypes';
 import { createStartingArmy } from '../meta/Army';
 import { buildBugReport } from '../meta/BugReport';
 import { DifficultyMode } from '../meta/Difficulty';
@@ -64,6 +65,10 @@ export class Game {
     this.stateContext = {
       app: this.app,
       stage: this.app.stage,
+      getSettings: () => ({ ...this.settings }),
+      setContentPack: (packId) => this.setContentPack(packId),
+      getContentStatus: () => contentManager.getStatus(),
+      getAvailableContentPacks: () => contentManager.getAvailablePacks(),
       getCampaignData: () => this.campaignData,
       setCampaignData: (data) => {
         this.campaignData = data;
@@ -370,6 +375,9 @@ export class Game {
         contentStatus: status.fallbackUsed ? 'Fallback' : 'OK',
         contentVersion: status.contentVersion,
         fallbackUsed: status.fallbackUsed,
+        selectedPackId: status.selectedPackId,
+        loadedPackId: status.loadedPackId,
+        contentErrors: status.errors,
         restartButtonLabel: this.currentStateId === 'BATTLE' ? 'Restart Current Battle' : 'Restart Run',
       },
       this.app.screen.width,
@@ -378,15 +386,43 @@ export class Game {
   }
 
   private async reloadContent(): Promise<void> {
-    await contentManager.loadAll({ forceReload: true });
+    await contentManager.loadAllForPack(this.settings.contentPackId, { forceReload: true });
     this.refreshContentWarning();
+  }
+
+  private async setContentPack(packId: string): Promise<ContentLoadStatus> {
+    if (this.currentStateId !== 'TITLE') {
+      console.warn('[Game] Ignored content pack change outside Title state.');
+      return contentManager.getStatus();
+    }
+
+    const normalizedPackId = packId.trim().length > 0 ? packId.trim() : 'base';
+    if (this.settings.contentPackId !== normalizedPackId) {
+      this.settings = {
+        ...this.settings,
+        contentPackId: normalizedPackId,
+      };
+      saveSettings(this.settings);
+    }
+
+    await contentManager.loadAllForPack(normalizedPackId, { forceReload: true });
+    this.refreshContentWarning();
+    return contentManager.getStatus();
   }
 
   private refreshContentWarning(): void {
     const status = contentManager.getStatus();
-    const showWarning = import.meta.env.DEV && status.fallbackUsed;
+    const showWarning = status.fallbackUsed;
+    let warningText = '';
+    if (showWarning) {
+      if (status.loadedPackId !== status.selectedPackId) {
+        warningText = `Content fallback: ${status.selectedPackId} -> ${status.loadedPackId}`;
+      } else {
+        warningText = 'Content load fallback';
+      }
+    }
     this.contentWarningText.visible = showWarning;
-    this.contentWarningText.text = showWarning ? 'Content load fallback' : '';
+    this.contentWarningText.text = warningText;
   }
 
   private handleDebugRestartAction(): void {
