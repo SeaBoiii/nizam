@@ -10,6 +10,7 @@ import {
 import { getDailySeed } from '../../meta/DailyChallenge';
 import { getBestForDate } from '../../meta/DailyResults';
 import { DifficultyMode } from '../../meta/Difficulty';
+import { HowToPlayOverlay } from '../../ui/widgets/HowToPlayOverlay';
 import { TextButton } from '../../ui/widgets/TextButton';
 import type { IGameState } from './IGameState';
 import type { StateContext } from './StateContext';
@@ -32,6 +33,17 @@ export class TitleState implements IGameState {
       fill: 0xcad8ec,
       fontFamily: 'monospace',
       fontSize: 20,
+    },
+  });
+  private readonly description = new Text({
+    text: 'Command squads in tactical battles • Upgrade your army • Conquer the campaign',
+    style: {
+      fill: 0xa5c2de,
+      fontFamily: 'monospace',
+      fontSize: 14,
+      wordWrap: true,
+      wordWrapWidth: 600,
+      align: 'center',
     },
   });
   private readonly status = new Text({
@@ -146,6 +158,8 @@ export class TitleState implements IGameState {
   private readonly challengeValidateButton: TextButton;
   private readonly challengeStartButton: TextButton;
   private readonly challengeCloseButton: TextButton;
+  private readonly howToPlayButton: TextButton;
+  private readonly howToPlayOverlay: HowToPlayOverlay;
 
   private selectedDifficulty = DifficultyMode.NORMAL;
   private availablePacks: ContentPackManifestEntry[] = [];
@@ -165,6 +179,7 @@ export class TitleState implements IGameState {
 
     this.title.anchor.set(0.5, 0.5);
     this.subtitle.anchor.set(0.5, 0.5);
+    this.description.anchor.set(0.5, 0.5);
     this.status.anchor.set(0.5, 0.5);
     this.packHeaderText.anchor.set(0.5, 0.5);
     this.packNameText.anchor.set(0.5, 0.5);
@@ -327,8 +342,19 @@ export class TitleState implements IGameState {
       },
     });
 
+    this.howToPlayButton = new TextButton({
+      label: 'How to Play',
+      width: 170,
+      onClick: () => {
+        this.howToPlayOverlay.show();
+      },
+    });
+
+    this.howToPlayOverlay = new HowToPlayOverlay();
+
     this.root.addChild(this.title);
     this.root.addChild(this.subtitle);
+    this.root.addChild(this.description);
     this.root.addChild(this.status);
     this.root.addChild(this.difficultyText);
     this.root.addChild(this.packHeaderText);
@@ -351,6 +377,7 @@ export class TitleState implements IGameState {
     this.root.addChild(this.hardButton);
     this.root.addChild(this.packPrevButton);
     this.root.addChild(this.packNextButton);
+    this.root.addChild(this.howToPlayButton);
 
     this.challengeModal.visible = false;
     this.challengeModalTitle.anchor.set(0.5, 0.5);
@@ -365,6 +392,7 @@ export class TitleState implements IGameState {
     this.challengeModal.addChild(this.challengeStartButton);
     this.challengeModal.addChild(this.challengeCloseButton);
     this.root.addChild(this.challengeModal);
+    this.root.addChild(this.howToPlayOverlay.root);
   }
 
   onEnter(): void {
@@ -425,8 +453,9 @@ export class TitleState implements IGameState {
     this.bg.rect(0, 0, width, height);
     this.bg.fill({ color: 0x0f1720, alpha: 1 });
 
-    this.title.position.set(width * 0.5, height * 0.16);
-    this.subtitle.position.set(width * 0.5, height * 0.24);
+    this.title.position.set(width * 0.5, height * 0.15);
+    this.subtitle.position.set(width * 0.5, height * 0.21);
+    this.description.position.set(width * 0.5, height * 0.26);
 
     this.packHeaderText.position.set(width * 0.5, height * 0.315);
     this.packNameText.position.set(width * 0.5, height * 0.36);
@@ -444,6 +473,7 @@ export class TitleState implements IGameState {
     this.continueChallengeButton.position.set(width * 0.5 - 110, height * 0.84);
     this.continueButton.position.set(width * 0.5 - 110, height * 0.895);
     this.clearButton.position.set(width * 0.5 - 110, height * 0.945);
+    this.howToPlayButton.position.set(width * 0.5 + 200, height * 0.54);
     this.statsButton.position.set(width * 0.5 - 370, height * 0.995);
     this.dailyHistoryButton.position.set(width * 0.5 - 190, height * 0.995);
     this.compareButton.position.set(width * 0.5 - 10, height * 0.995);
@@ -455,6 +485,7 @@ export class TitleState implements IGameState {
     this.status.position.set(width * 0.5, height * 0.99);
 
     this.layoutChallengeModal(width, height);
+    this.howToPlayOverlay.layout(width, height);
   }
 
   private refreshDifficultyButtons(): void {
