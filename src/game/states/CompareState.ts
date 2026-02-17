@@ -1,6 +1,7 @@
 import { Container, Graphics, Text } from 'pixi.js';
 import { addEntry, leaderboardKeyForResult } from '../../meta/LocalLeaderboard';
 import { decodeResult, formatResultSummaryText, type ResultPayloadV1 } from '../../meta/ResultCode';
+import { MENU_BODY_FONT, MENU_TITLE_FONT, drawMenuBackdrop, drawMenuCard, styleCodeTextArea } from '../../ui/theme/MenuTheme';
 import { TextButton } from '../../ui/widgets/TextButton';
 import { copyTextWithFallback } from '../../utils/clipboard';
 import type { IGameState } from './IGameState';
@@ -93,16 +94,17 @@ export class CompareState implements IGameState {
     text: 'Compare Results',
     style: {
       fill: 0xf3e3b8,
-      fontFamily: 'monospace',
-      fontSize: 38,
-      fontWeight: 'bold',
+      fontFamily: MENU_TITLE_FONT,
+      fontSize: 36,
+      fontWeight: '700',
+      letterSpacing: 0.8,
     },
   });
   private readonly compatibilityText = new Text({
     text: '',
     style: {
       fill: 0xa8d3ff,
-      fontFamily: 'monospace',
+      fontFamily: MENU_BODY_FONT,
       fontSize: 13,
       wordWrap: true,
       wordWrapWidth: 1020,
@@ -112,7 +114,7 @@ export class CompareState implements IGameState {
     text: '',
     style: {
       fill: 0xb9d8f7,
-      fontFamily: 'monospace',
+      fontFamily: MENU_BODY_FONT,
       fontSize: 13,
       wordWrap: true,
       wordWrapWidth: 1020,
@@ -122,7 +124,7 @@ export class CompareState implements IGameState {
     text: '',
     style: {
       fill: 0xe0ecff,
-      fontFamily: 'monospace',
+      fontFamily: MENU_BODY_FONT,
       fontSize: 14,
       lineHeight: 21,
       wordWrap: true,
@@ -133,7 +135,7 @@ export class CompareState implements IGameState {
     text: '',
     style: {
       fill: 0xe0ecff,
-      fontFamily: 'monospace',
+      fontFamily: MENU_BODY_FONT,
       fontSize: 14,
       lineHeight: 21,
       wordWrap: true,
@@ -165,6 +167,7 @@ export class CompareState implements IGameState {
     this.validateButton = new TextButton({
       label: 'Validate Code',
       width: 190,
+      variant: 'accent',
       onClick: () => {
         void this.validateInput();
       },
@@ -172,6 +175,7 @@ export class CompareState implements IGameState {
     this.copySummaryButton = new TextButton({
       label: 'Copy Theirs Summary',
       width: 230,
+      variant: 'secondary',
       onClick: () => {
         void this.copyTheirsSummary();
       },
@@ -179,11 +183,13 @@ export class CompareState implements IGameState {
     this.saveButton = new TextButton({
       label: 'Save To Leaderboard',
       width: 230,
+      variant: 'secondary',
       onClick: () => this.saveToLeaderboard(),
     });
     this.backButton = new TextButton({
       label: 'Back',
       width: 150,
+      variant: 'primary',
       onClick: () => this.goBack(),
     });
 
@@ -325,14 +331,7 @@ export class CompareState implements IGameState {
       area.placeholder = 'Paste Result Code here...';
       area.style.position = 'fixed';
       area.style.zIndex = '30';
-      area.style.fontFamily = 'monospace';
-      area.style.fontSize = '12px';
-      area.style.background = '#0f1720';
-      area.style.color = '#d4e7ff';
-      area.style.border = '1px solid #6e9bc9';
-      area.style.borderRadius = '8px';
-      area.style.padding = '8px';
-      area.style.resize = 'none';
+      styleCodeTextArea(area);
       area.addEventListener('input', () => {
         this.theirResult = null;
         this.theirVerified = true;
@@ -462,14 +461,11 @@ export class CompareState implements IGameState {
     const panelY = height * 0.5 - panelHeight * 0.5;
     const halfWidth = panelWidth * 0.5;
 
-    this.bg.clear();
-    this.bg.rect(0, 0, width, height);
-    this.bg.fill({ color: 0x0f1720, alpha: 1 });
-
-    this.panel.clear();
-    this.panel.roundRect(panelX, panelY, panelWidth, panelHeight, 12);
-    this.panel.fill({ color: 0x121c2a, alpha: 0.96 });
-    this.panel.stroke({ color: 0x6e9bc9, alpha: 0.9, width: 1.6 });
+    drawMenuBackdrop(this.bg, width, height);
+    drawMenuCard(this.panel, panelX, panelY, panelWidth, panelHeight);
+    this.panel.moveTo(panelX + halfWidth, panelY + 62);
+    this.panel.lineTo(panelX + halfWidth, panelY + panelHeight - 120);
+    this.panel.stroke({ color: 0x6d93b8, alpha: 0.35, width: 1.1 });
 
     this.title.position.set(width * 0.5, panelY + 34);
     this.compatibilityText.style.wordWrapWidth = panelWidth - 56;

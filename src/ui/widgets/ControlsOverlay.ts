@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from 'pixi.js';
+import { MENU_BODY_FONT, drawMenuCard } from '../theme/MenuTheme';
 
 const MAX_SCROLL = 520;
 
@@ -12,9 +13,9 @@ export class ControlsOverlay {
     text: '',
     style: {
       fill: 0xdce9fa,
-      fontFamily: 'monospace',
+      fontFamily: MENU_BODY_FONT,
       fontSize: 14,
-      lineHeight: 20,
+      lineHeight: 21,
     },
   });
 
@@ -31,46 +32,38 @@ export class ControlsOverlay {
     this.content.mask = this.maskGraphics;
 
     this.text.text = [
-      '═══════════════════════════════════════════════════════',
-      '                      QUICK CONTROLS',
-      '═══════════════════════════════════════════════════════',
+      'Quick Controls',
       '',
-      '🎮 CAMERA CONTROLS',
-      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-      'WASD / Arrow Keys .............. Pan camera',
-      'Mouse Wheel .................... Zoom in/out',
+      'Camera',
+      'WASD or Arrow Keys: Pan',
+      'Mouse Wheel: Zoom',
       '',
-      '⚔️  SQUAD SELECTION & MOVEMENT',
-      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-      'Left Click ..................... Select squad',
-      'Drag Left Mouse ................ Box select multiple',
-      'Right Click .................... Move order',
-      'Shift + Right Click ............ Queue waypoint',
-      'Alt + Right Click .............. Move + set facing',
+      'Selection and Movement',
+      'Left Click: Select squad',
+      'Drag Left Mouse: Box select',
+      'Right Click: Move order',
+      'Shift + Right Click: Queue waypoint',
+      'Alt + Right Click: Move and set facing',
       '',
-      '🛡️  FORMATION HOTKEYS',
-      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-      '1 - Line ....................... Balanced (default)',
-      '2 - Column ..................... Narrow & deep',
-      '3 - Wedge ...................... Breakthrough',
-      '4 - Loose ...................... vs Missiles',
+      'Formations',
+      '1: Line',
+      '2: Column',
+      '3: Wedge',
+      '4: Loose',
       '',
-      '⚡ TACTICAL COMMANDS',
-      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-      'H - Hold Position .............. Stop & defend',
-      'C - Charge ..................... Attack nearest',
-      'V - Volley Stance .............. Ranged: hold & fire',
-      'K - Skirmish Mode .............. Ranged: kite & shoot',
-      'R - Rally (Commander) .......... Boost morale',
-      'T or Shift+R - Retreat ......... Fall back',
+      'Tactical Orders',
+      'H: Hold position',
+      'C: Charge',
+      'V: Volley stance',
+      'K: Skirmish mode',
+      'R: Rally ability',
+      'T or Shift+R: Retreat',
       '',
-      '🎯 UTILITY',
-      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-      'ESC ............................ Pause / Resume',
-      'F1 or ` (backtick) ............. Debug panel',
+      'Utility',
+      'ESC: Pause menu',
+      'F1 or `: Debug panel',
       '',
-      '💡 TIP: Use F1 during battle to access full guide!',
-      '',
+      'Tip: Use terrain and morale to your advantage.',
     ].join('\n');
   }
 
@@ -97,10 +90,7 @@ export class ControlsOverlay {
     const x = screenWidth * 0.5 - this.width * 0.5;
     const y = screenHeight * 0.5 - this.height * 0.5;
 
-    this.panel.clear();
-    this.panel.roundRect(x, y, this.width, this.height, 10);
-    this.panel.fill({ color: 0x131d2b, alpha: 0.97 });
-    this.panel.stroke({ color: 0x789ec6, alpha: 0.92, width: 1.6 });
+    drawMenuCard(this.panel, x, y, this.width, this.height, { radius: 12 });
 
     this.maskGraphics.clear();
     this.maskGraphics.rect(x + 16, y + 18, this.width - 32, this.height - 36);
@@ -114,4 +104,3 @@ export class ControlsOverlay {
     return 0;
   }
 }
-

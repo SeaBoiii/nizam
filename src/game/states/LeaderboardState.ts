@@ -9,6 +9,7 @@ import {
   type LocalLeaderboardEntry,
 } from '../../meta/LocalLeaderboard';
 import { encodeResult, type ResultPayloadV1 } from '../../meta/ResultCode';
+import { MENU_BODY_FONT, MENU_TITLE_FONT, drawMenuBackdrop, drawMenuCard } from '../../ui/theme/MenuTheme';
 import { TextButton } from '../../ui/widgets/TextButton';
 import { copyTextWithFallback } from '../../utils/clipboard';
 import type { IGameState } from './IGameState';
@@ -76,16 +77,17 @@ export class LeaderboardState implements IGameState {
     text: 'Leaderboards (Local)',
     style: {
       fill: 0xf3e3b8,
-      fontFamily: 'monospace',
-      fontSize: 38,
-      fontWeight: 'bold',
+      fontFamily: MENU_TITLE_FONT,
+      fontSize: 36,
+      fontWeight: '700',
+      letterSpacing: 0.8,
     },
   });
   private readonly keyLabel = new Text({
     text: '',
     style: {
       fill: 0xc7def8,
-      fontFamily: 'monospace',
+      fontFamily: MENU_BODY_FONT,
       fontSize: 14,
       wordWrap: true,
       wordWrapWidth: 1080,
@@ -95,7 +97,7 @@ export class LeaderboardState implements IGameState {
     text: '',
     style: {
       fill: 0xe1edff,
-      fontFamily: 'monospace',
+      fontFamily: MENU_BODY_FONT,
       fontSize: 14,
       lineHeight: 21,
       wordWrap: true,
@@ -106,7 +108,7 @@ export class LeaderboardState implements IGameState {
     text: '',
     style: {
       fill: 0x9ec8ef,
-      fontFamily: 'monospace',
+      fontFamily: MENU_BODY_FONT,
       fontSize: 13,
     },
   });
@@ -144,37 +146,44 @@ export class LeaderboardState implements IGameState {
       label: '<',
       width: 58,
       height: 36,
+      variant: 'secondary',
       onClick: () => this.cycleKey(-1),
     });
     this.nextKeyButton = new TextButton({
       label: '>',
       width: 58,
       height: 36,
+      variant: 'secondary',
       onClick: () => this.cycleKey(1),
     });
     this.todayDailyButton = new TextButton({
       label: 'Today Daily',
       width: 170,
+      variant: 'accent',
       onClick: () => this.selectTodayDailyKey(),
     });
     this.challengeKeyButton = new TextButton({
       label: 'Challenge Seed...',
       width: 190,
+      variant: 'secondary',
       onClick: () => this.selectChallengeSeedKey(),
     });
     this.normalButton = new TextButton({
       label: 'Normal',
       width: 120,
+      variant: 'secondary',
       onClick: () => this.setDifficulty(DifficultyMode.NORMAL),
     });
     this.hardButton = new TextButton({
       label: 'Hard',
       width: 120,
+      variant: 'secondary',
       onClick: () => this.setDifficulty(DifficultyMode.HARD),
     });
     this.copyCodeButton = new TextButton({
       label: 'Copy Result Code',
       width: 200,
+      variant: 'secondary',
       onClick: () => {
         void this.copySelectedCode();
       },
@@ -182,16 +191,19 @@ export class LeaderboardState implements IGameState {
     this.removeButton = new TextButton({
       label: 'Remove',
       width: 160,
+      variant: 'danger',
       onClick: () => this.removeSelected(),
     });
     this.resetButton = new TextButton({
       label: 'Reset All',
       width: 170,
+      variant: 'danger',
       onClick: () => this.resetLeaderboards(),
     });
     this.backButton = new TextButton({
       label: 'Back',
       width: 140,
+      variant: 'primary',
       onClick: () => this.context.transitionTo('TITLE'),
     });
 
@@ -216,6 +228,7 @@ export class LeaderboardState implements IGameState {
         label: '-',
         width: 390,
         height: 36,
+        variant: 'secondary',
         onClick: () => this.selectEntry(index),
       });
       this.entryButtons.push(button);
@@ -264,11 +277,15 @@ export class LeaderboardState implements IGameState {
 
   private refreshDifficultyButtons(): void {
     if (this.selectedDifficulty === DifficultyMode.NORMAL) {
-      this.normalButton.setLabel('[Normal]');
+      this.normalButton.setLabel('Normal');
+      this.normalButton.setVariant('accent');
+      this.hardButton.setVariant('secondary');
       this.hardButton.setLabel('Hard');
     } else {
       this.normalButton.setLabel('Normal');
-      this.hardButton.setLabel('[Hard]');
+      this.normalButton.setVariant('secondary');
+      this.hardButton.setVariant('accent');
+      this.hardButton.setLabel('Hard');
     }
   }
 
@@ -454,14 +471,8 @@ export class LeaderboardState implements IGameState {
     const panelX = width * 0.5 - panelWidth * 0.5;
     const panelY = height * 0.5 - panelHeight * 0.5;
 
-    this.bg.clear();
-    this.bg.rect(0, 0, width, height);
-    this.bg.fill({ color: 0x0f1720, alpha: 1 });
-
-    this.panel.clear();
-    this.panel.roundRect(panelX, panelY, panelWidth, panelHeight, 12);
-    this.panel.fill({ color: 0x121c2a, alpha: 0.96 });
-    this.panel.stroke({ color: 0x6e9bc9, alpha: 0.9, width: 1.6 });
+    drawMenuBackdrop(this.bg, width, height);
+    drawMenuCard(this.panel, panelX, panelY, panelWidth, panelHeight);
 
     this.title.position.set(width * 0.5, panelY + 34);
     this.keyLabel.style.wordWrapWidth = panelWidth - 56;

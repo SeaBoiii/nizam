@@ -12,6 +12,7 @@ import {
 } from '../../ui/share/ShareCard';
 import { exportShareCardPNG } from '../../ui/share/ShareCardExporter';
 import { downloadBlob, downloadDataUrl } from '../../ui/share/download';
+import { MENU_BODY_FONT, MENU_TITLE_FONT, drawMenuBackdrop, drawMenuCard } from '../../ui/theme/MenuTheme';
 import { TextButton } from '../../ui/widgets/TextButton';
 import { copyTextWithFallback } from '../../utils/clipboard';
 import type { IGameState } from './IGameState';
@@ -46,9 +47,10 @@ export class DailyHistoryState implements IGameState {
     text: 'Daily History',
     style: {
       fill: 0xf3e3b8,
-      fontFamily: 'monospace',
-      fontSize: 38,
-      fontWeight: 'bold',
+      fontFamily: MENU_TITLE_FONT,
+      fontSize: 36,
+      fontWeight: '700',
+      letterSpacing: 0.8,
     },
   });
 
@@ -56,8 +58,9 @@ export class DailyHistoryState implements IGameState {
     text: 'Recent Results',
     style: {
       fill: 0xc7def8,
-      fontFamily: 'monospace',
+      fontFamily: MENU_BODY_FONT,
       fontSize: 16,
+      fontWeight: '600',
     },
   });
 
@@ -65,8 +68,9 @@ export class DailyHistoryState implements IGameState {
     text: 'Details',
     style: {
       fill: 0xc7def8,
-      fontFamily: 'monospace',
+      fontFamily: MENU_BODY_FONT,
       fontSize: 16,
+      fontWeight: '600',
     },
   });
 
@@ -74,7 +78,7 @@ export class DailyHistoryState implements IGameState {
     text: 'No history entries yet.',
     style: {
       fill: 0xe1edff,
-      fontFamily: 'monospace',
+      fontFamily: MENU_BODY_FONT,
       fontSize: 14,
       lineHeight: 21,
       wordWrap: true,
@@ -86,7 +90,7 @@ export class DailyHistoryState implements IGameState {
     text: '',
     style: {
       fill: 0x9ec8ef,
-      fontFamily: 'monospace',
+      fontFamily: MENU_BODY_FONT,
       fontSize: 13,
     },
   });
@@ -121,6 +125,7 @@ export class DailyHistoryState implements IGameState {
         label: '-',
         width: 336,
         height: 36,
+        variant: 'secondary',
         onClick: () => this.selectEntry(index),
       });
       this.entryButtons.push(button);
@@ -130,21 +135,25 @@ export class DailyHistoryState implements IGameState {
     this.copyButton = new TextButton({
       label: 'Copy Share Text',
       width: 200,
+      variant: 'secondary',
       onClick: () => this.copySelectedShareText(),
     });
     this.downloadButton = new TextButton({
       label: 'Download Share Card',
       width: 240,
+      variant: 'accent',
       onClick: () => this.downloadSelectedShareCard(),
     });
     this.resetButton = new TextButton({
       label: 'Reset Daily History',
       width: 210,
+      variant: 'danger',
       onClick: () => this.resetHistory(),
     });
     this.backButton = new TextButton({
       label: 'Back',
       width: 140,
+      variant: 'primary',
       onClick: () => this.context.transitionTo('TITLE'),
     });
 
@@ -331,14 +340,8 @@ export class DailyHistoryState implements IGameState {
     const panelX = width * 0.5 - panelWidth * 0.5;
     const panelY = height * 0.5 - panelHeight * 0.5;
 
-    this.bg.clear();
-    this.bg.rect(0, 0, width, height);
-    this.bg.fill({ color: 0x0f1720, alpha: 1 });
-
-    this.panel.clear();
-    this.panel.roundRect(panelX, panelY, panelWidth, panelHeight, 12);
-    this.panel.fill({ color: 0x121c2a, alpha: 0.96 });
-    this.panel.stroke({ color: 0x6e9bc9, alpha: 0.9, width: 1.6 });
+    drawMenuBackdrop(this.bg, width, height);
+    drawMenuCard(this.panel, panelX, panelY, panelWidth, panelHeight);
 
     this.title.position.set(width * 0.5, panelY + 34);
 

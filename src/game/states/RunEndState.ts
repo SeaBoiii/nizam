@@ -11,6 +11,14 @@ import {
 } from '../../ui/share/ShareCard';
 import { exportShareCardPNG } from '../../ui/share/ShareCardExporter';
 import { downloadBlob, downloadDataUrl } from '../../ui/share/download';
+import {
+  MENU_BODY_FONT,
+  MENU_MONO_FONT,
+  MENU_TITLE_FONT,
+  drawMenuBackdrop,
+  drawMenuCard,
+  styleCodeTextArea,
+} from '../../ui/theme/MenuTheme';
 import { TextButton } from '../../ui/widgets/TextButton';
 import { copyTextWithFallback } from '../../utils/clipboard';
 import type { IGameState } from './IGameState';
@@ -45,17 +53,18 @@ export class RunEndState implements IGameState {
     text: 'Run Summary',
     style: {
       fill: 0xf4e2b5,
-      fontFamily: 'monospace',
-      fontSize: 42,
-      fontWeight: 'bold',
+      fontFamily: MENU_TITLE_FONT,
+      fontSize: 40,
+      fontWeight: '700',
+      letterSpacing: 0.8,
     },
   });
   private readonly body = new Text({
     text: '',
     style: {
       fill: 0xd8e9ff,
-      fontFamily: 'monospace',
-      fontSize: 15,
+      fontFamily: MENU_BODY_FONT,
+      fontSize: 14,
       lineHeight: 22,
       wordWrap: true,
       wordWrapWidth: 900,
@@ -65,7 +74,7 @@ export class RunEndState implements IGameState {
     text: '',
     style: {
       fill: 0x9dd1ff,
-      fontFamily: 'monospace',
+      fontFamily: MENU_BODY_FONT,
       fontSize: 13,
     },
   });
@@ -84,16 +93,16 @@ export class RunEndState implements IGameState {
     text: 'Challenge Code',
     style: {
       fill: 0xf4e2b5,
-      fontFamily: 'monospace',
+      fontFamily: MENU_TITLE_FONT,
       fontSize: 24,
-      fontWeight: 'bold',
+      fontWeight: '700',
     },
   });
   private readonly challengeModalHint = new Text({
     text: 'Share this code to recreate this run setup.',
     style: {
       fill: 0xc3daf6,
-      fontFamily: 'monospace',
+      fontFamily: MENU_BODY_FONT,
       fontSize: 14,
     },
   });
@@ -101,7 +110,7 @@ export class RunEndState implements IGameState {
     text: '',
     style: {
       fill: 0xa7cdf4,
-      fontFamily: 'monospace',
+      fontFamily: MENU_BODY_FONT,
       fontSize: 13,
     },
   });
@@ -129,51 +138,61 @@ export class RunEndState implements IGameState {
     this.copyButton = new TextButton({
       label: 'Copy Result Text',
       width: 220,
+      variant: 'secondary',
       onClick: () => this.copyResult(),
     });
     this.copyResultCodeButton = new TextButton({
       label: 'Copy Result Code',
       width: 220,
+      variant: 'secondary',
       onClick: () => this.copyResultCode(),
     });
     this.compareResultButton = new TextButton({
       label: 'Compare Result Code',
       width: 220,
+      variant: 'secondary',
       onClick: () => this.openCompare(),
     });
     this.createChallengeButton = new TextButton({
       label: 'Create Challenge Code',
       width: 240,
+      variant: 'accent',
       onClick: () => this.openChallengeModal(),
     });
     this.downloadCardButton = new TextButton({
       label: 'Download Share Card (PNG)',
       width: 260,
+      variant: 'accent',
       onClick: () => this.downloadCard(),
     });
     this.newDailyButton = new TextButton({
       label: 'New Daily Run',
       width: 220,
+      variant: 'accent',
       onClick: () => this.startNewDaily(),
     });
     this.backButton = new TextButton({
       label: 'Back To Title',
       width: 220,
+      variant: 'primary',
       onClick: () => this.backToTitle(),
     });
     this.challengeCopyCodeButton = new TextButton({
       label: 'Copy Code',
       width: 190,
+      variant: 'secondary',
       onClick: () => this.copyChallengeCode(),
     });
     this.challengeCopyShareButton = new TextButton({
       label: 'Copy Share Text',
       width: 210,
+      variant: 'secondary',
       onClick: () => this.copyChallengeShareText(),
     });
     this.challengeCloseButton = new TextButton({
       label: 'Close',
       width: 160,
+      variant: 'primary',
       onClick: () => this.closeChallengeModal(),
     });
 
@@ -452,14 +471,8 @@ export class RunEndState implements IGameState {
       textArea.value = this.challengeCode;
       textArea.style.position = 'fixed';
       textArea.style.zIndex = '30';
-      textArea.style.fontFamily = 'monospace';
-      textArea.style.fontSize = '12px';
-      textArea.style.background = '#0f1720';
-      textArea.style.color = '#d4e7ff';
-      textArea.style.border = '1px solid #6e9bc9';
-      textArea.style.borderRadius = '8px';
-      textArea.style.padding = '8px';
-      textArea.style.resize = 'none';
+      styleCodeTextArea(textArea);
+      textArea.style.fontFamily = MENU_MONO_FONT;
       document.body.appendChild(textArea);
       this.challengeCodeTextArea = textArea;
     }
@@ -570,14 +583,8 @@ export class RunEndState implements IGameState {
     const panelX = width * 0.5 - panelWidth * 0.5;
     const panelY = height * 0.5 - panelHeight * 0.5;
 
-    this.bg.clear();
-    this.bg.rect(0, 0, width, height);
-    this.bg.fill({ color: 0x0f1720, alpha: 1 });
-
-    this.panel.clear();
-    this.panel.roundRect(panelX, panelY, panelWidth, panelHeight, 12);
-    this.panel.fill({ color: 0x121c2a, alpha: 0.96 });
-    this.panel.stroke({ color: 0x6e9bc9, alpha: 0.9, width: 1.6 });
+    drawMenuBackdrop(this.bg, width, height);
+    drawMenuCard(this.panel, panelX, panelY, panelWidth, panelHeight);
 
     this.title.position.set(width * 0.5, panelY + 34);
     this.body.style.wordWrapWidth = panelWidth - 70;
@@ -611,12 +618,10 @@ export class RunEndState implements IGameState {
 
       this.challengeModalBackdrop.clear();
       this.challengeModalBackdrop.rect(0, 0, width, height);
-      this.challengeModalBackdrop.fill({ color: 0x000000, alpha: 0.68 });
-
-      this.challengeModalPanel.clear();
-      this.challengeModalPanel.roundRect(modalX, modalY, modalWidth, modalHeight, 12);
-      this.challengeModalPanel.fill({ color: 0x111c29, alpha: 0.98 });
-      this.challengeModalPanel.stroke({ color: 0x6e9bc9, alpha: 0.92, width: 1.6 });
+      this.challengeModalBackdrop.fill({ color: 0x04090e, alpha: 0.76 });
+      drawMenuCard(this.challengeModalPanel, modalX, modalY, modalWidth, modalHeight, {
+        radius: 14,
+      });
 
       this.challengeModalTitle.position.set(width * 0.5, modalY + 34);
       this.challengeModalHint.position.set(width * 0.5, modalY + 62);

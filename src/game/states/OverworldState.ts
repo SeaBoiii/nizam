@@ -9,6 +9,7 @@ import { archetypeChoices, archetypeDisplayName } from '../../meta/Progression';
 import { createSquadMeta } from '../../meta/Army';
 import { contentManager } from '../../content/ContentManager';
 import { SeededRng } from '../../utils/rng';
+import { MENU_BODY_FONT, MENU_TITLE_FONT, drawMenuBackdrop, drawMenuCard } from '../../ui/theme/MenuTheme';
 
 const MAP_OFFSET_X = 120;
 const MAP_OFFSET_Y = 120;
@@ -59,6 +60,8 @@ function nodeRewardHint(type: NodeType): string {
 export class OverworldState implements IGameState {
   private readonly root = new Container();
   private readonly bg = new Graphics();
+  private readonly topBarBg = new Graphics();
+  private readonly tooltipBg = new Graphics();
   private readonly mapGraphics = new Graphics();
   private readonly panel = new Container();
 
@@ -66,25 +69,31 @@ export class OverworldState implements IGameState {
     text: 'Overworld',
     style: {
       fill: 0xf4e0b4,
-      fontFamily: 'monospace',
-      fontSize: 26,
-      fontWeight: 'bold',
+      fontFamily: MENU_TITLE_FONT,
+      fontSize: 30,
+      fontWeight: '700',
+      letterSpacing: 0.6,
     },
   });
   private readonly topBarText = new Text({
     text: '',
     style: {
       fill: 0xd4e7ff,
-      fontFamily: 'monospace',
-      fontSize: 15,
+      fontFamily: MENU_BODY_FONT,
+      fontSize: 14,
+      lineHeight: 20,
+      wordWrap: true,
+      wordWrapWidth: 920,
     },
   });
   private readonly tooltipText = new Text({
     text: '',
     style: {
       fill: 0xf0e0bf,
-      fontFamily: 'monospace',
-      fontSize: 14,
+      fontFamily: MENU_BODY_FONT,
+      fontSize: 13,
+      wordWrap: true,
+      wordWrapWidth: 900,
     },
   });
 
@@ -93,17 +102,20 @@ export class OverworldState implements IGameState {
     text: '',
     style: {
       fill: 0xf8e8c0,
-      fontFamily: 'monospace',
-      fontSize: 22,
-      fontWeight: 'bold',
+      fontFamily: MENU_TITLE_FONT,
+      fontSize: 24,
+      fontWeight: '700',
     },
   });
   private readonly panelBody = new Text({
     text: '',
     style: {
       fill: 0xd6e7ff,
-      fontFamily: 'monospace',
+      fontFamily: MENU_BODY_FONT,
       fontSize: 16,
+      lineHeight: 22,
+      wordWrap: true,
+      wordWrapWidth: 380,
     },
   });
 
@@ -115,6 +127,8 @@ export class OverworldState implements IGameState {
 
   constructor(private readonly context: StateContext) {
     this.root.addChild(this.bg);
+    this.root.addChild(this.topBarBg);
+    this.root.addChild(this.tooltipBg);
     this.root.addChild(this.mapGraphics);
 
     this.root.addChild(this.titleText);
@@ -133,6 +147,7 @@ export class OverworldState implements IGameState {
       label: 'Back To Title',
       width: 170,
       height: 36,
+      variant: 'primary',
       onClick: () => {
         this.context.transitionTo('TITLE');
       },
@@ -408,6 +423,7 @@ export class OverworldState implements IGameState {
     const button = new TextButton({
       label,
       width: 320,
+      variant: 'secondary',
       onClick,
     });
     this.panelButtons.push(button);
@@ -472,8 +488,10 @@ export class OverworldState implements IGameState {
     this.mapGraphics.clear();
 
     this.mapGraphics.roundRect(MAP_OFFSET_X - 26, MAP_OFFSET_Y - 26, MAP_WIDTH + 52, MAP_HEIGHT + 52, 12);
-    this.mapGraphics.fill({ color: 0x101826, alpha: 0.92 });
-    this.mapGraphics.stroke({ color: 0x567aa0, alpha: 0.8, width: 1.5 });
+    this.mapGraphics.fill({ color: 0x101826, alpha: 0.94 });
+    this.mapGraphics.stroke({ color: 0x7ea6c9, alpha: 0.82, width: 1.6 });
+    this.mapGraphics.roundRect(MAP_OFFSET_X - 24, MAP_OFFSET_Y - 24, MAP_WIDTH + 48, 70, 10);
+    this.mapGraphics.fill({ color: 0xffffff, alpha: 0.03 });
 
     for (let i = 0; i < mapState.nodes.length; i += 1) {
       const node = mapState.nodes[i];
@@ -491,7 +509,7 @@ export class OverworldState implements IGameState {
 
         this.mapGraphics.moveTo(fromX, fromY);
         this.mapGraphics.lineTo(toX, toY);
-        this.mapGraphics.stroke({ color: 0x607d9b, alpha: 0.44, width: 1.2 });
+        this.mapGraphics.stroke({ color: 0x7a98b6, alpha: 0.44, width: 1.3 });
       }
     }
 
@@ -511,7 +529,7 @@ export class OverworldState implements IGameState {
       this.mapGraphics.fill({ color: baseColor, alpha });
 
       this.mapGraphics.circle(x, y, NODE_RADIUS);
-      this.mapGraphics.stroke({ color: 0x17202a, alpha: 0.9, width: 2 });
+      this.mapGraphics.stroke({ color: 0x121821, alpha: 0.95, width: 2.1 });
 
       if (selectable) {
         this.mapGraphics.circle(x, y, NODE_RADIUS + 4);
@@ -585,15 +603,19 @@ export class OverworldState implements IGameState {
     const width = this.context.app.screen.width;
     const height = this.context.app.screen.height;
 
-    this.bg.clear();
-    this.bg.rect(0, 0, width, height);
-    this.bg.fill({ color: 0x0f1720, alpha: 1 });
+    drawMenuBackdrop(this.bg, width, height);
 
-    this.titleText.position.set(16, 18);
-    this.topBarText.position.set(16, 56);
-    this.tooltipText.position.set(16, height - 34);
+    drawMenuCard(this.topBarBg, 14, 12, width - 28, 92, { radius: 12, borderAlpha: 0.66 });
+    drawMenuCard(this.tooltipBg, 14, height - 72, width - 28, 56, { radius: 12, borderAlpha: 0.62 });
 
-    this.backButton.position.set(width - 188, 18);
+    this.topBarText.style.wordWrapWidth = width - 52;
+    this.tooltipText.style.wordWrapWidth = width - 52;
+
+    this.titleText.position.set(24, 20);
+    this.topBarText.position.set(24, 52);
+    this.tooltipText.position.set(24, height - 54);
+
+    this.backButton.position.set(width - 196, 20);
 
     this.layoutPanel();
   }
@@ -612,11 +634,7 @@ export class OverworldState implements IGameState {
     const panelY = height * 0.5 - panelHeight * 0.5;
 
     this.panel.position.set(panelX, panelY);
-
-    this.panelBg.clear();
-    this.panelBg.roundRect(0, 0, panelWidth, panelHeight, 10);
-    this.panelBg.fill({ color: 0x111b28, alpha: 0.96 });
-    this.panelBg.stroke({ color: 0x6e9bc9, alpha: 0.95, width: 1.6 });
+    drawMenuCard(this.panelBg, 0, 0, panelWidth, panelHeight, { radius: 12, borderAlpha: 0.92 });
 
     this.panelTitle.position.set(panelWidth * 0.5, 34);
     this.panelBody.position.set(panelWidth * 0.5, 64);

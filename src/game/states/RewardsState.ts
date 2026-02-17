@@ -17,33 +17,38 @@ import { createSquadMeta } from '../../meta/Army';
 import { SeededRng } from '../../utils/rng';
 import { PerkChoice } from '../../ui/widgets/PerkChoice';
 import { objectiveDisplayName } from '../../sim/objectives/ObjectiveTypes';
+import { MENU_BODY_FONT, MENU_TITLE_FONT, drawMenuBackdrop, drawMenuCard } from '../../ui/theme/MenuTheme';
 
 export class RewardsState implements IGameState {
   private readonly root = new Container();
   private readonly bg = new Graphics();
+  private readonly panel = new Graphics();
   private readonly title = new Text({
     text: '',
     style: {
       fill: 0xf8e7b6,
-      fontFamily: 'monospace',
-      fontSize: 42,
-      fontWeight: 'bold',
+      fontFamily: MENU_TITLE_FONT,
+      fontSize: 40,
+      fontWeight: '700',
+      letterSpacing: 0.8,
     },
   });
   private readonly summary = new Text({
     text: '',
     style: {
       fill: 0xe0ecff,
-      fontFamily: 'monospace',
-      fontSize: 18,
+      fontFamily: MENU_BODY_FONT,
+      fontSize: 16,
+      lineHeight: 24,
     },
   });
   private readonly rewardInfo = new Text({
     text: '',
     style: {
       fill: 0xbfe0ff,
-      fontFamily: 'monospace',
-      fontSize: 16,
+      fontFamily: MENU_BODY_FONT,
+      fontSize: 15,
+      lineHeight: 22,
     },
   });
 
@@ -60,6 +65,7 @@ export class RewardsState implements IGameState {
 
   constructor(private readonly context: StateContext) {
     this.root.addChild(this.bg);
+    this.root.addChild(this.panel);
 
     this.title.anchor.set(0.5, 0.5);
     this.summary.anchor.set(0.5, 0);
@@ -67,18 +73,21 @@ export class RewardsState implements IGameState {
 
     this.upgradeButton = new TextButton({
       label: 'Upgrade Squad',
+      variant: 'accent',
       onClick: () => this.applyUpgradeChoice(),
       width: 360,
     });
 
     this.recruitButton = new TextButton({
       label: 'Recruit New Squad',
+      variant: 'secondary',
       onClick: () => this.applyRecruitChoice(),
       width: 360,
     });
 
     this.continueButton = new TextButton({
       label: 'Continue',
+      variant: 'primary',
       onClick: () => {
         if (this.goToRunEndOnContinue) {
           this.context.transitionTo('RUN_END');
@@ -367,18 +376,26 @@ export class RewardsState implements IGameState {
   private layout(): void {
     const width = this.context.app.screen.width;
     const height = this.context.app.screen.height;
+    const panelWidth = Math.min(920, width - 40);
+    const panelHeight = Math.min(610, height - 40);
+    const panelX = width * 0.5 - panelWidth * 0.5;
+    const panelY = height * 0.5 - panelHeight * 0.5;
 
-    this.bg.clear();
-    this.bg.rect(0, 0, width, height);
-    this.bg.fill({ color: 0x101722, alpha: 1 });
+    drawMenuBackdrop(this.bg, width, height);
+    drawMenuCard(this.panel, panelX, panelY, panelWidth, panelHeight);
 
-    this.title.position.set(width * 0.5, 96);
-    this.summary.position.set(width * 0.5, 150);
-    this.rewardInfo.position.set(width * 0.5, 270);
+    this.summary.style.wordWrap = true;
+    this.summary.style.wordWrapWidth = panelWidth - 84;
+    this.rewardInfo.style.wordWrap = true;
+    this.rewardInfo.style.wordWrapWidth = panelWidth - 84;
 
-    this.upgradeButton.position.set(width * 0.5 - 180, 365);
-    this.recruitButton.position.set(width * 0.5 - 180, 423);
-    this.continueButton.position.set(width * 0.5 - 110, 500);
+    this.title.position.set(width * 0.5, panelY + 52);
+    this.summary.position.set(width * 0.5, panelY + 94);
+    this.rewardInfo.position.set(width * 0.5, panelY + 214);
+
+    this.upgradeButton.position.set(width * 0.5 - 180, panelY + panelHeight - 186);
+    this.recruitButton.position.set(width * 0.5 - 180, panelY + panelHeight - 130);
+    this.continueButton.position.set(width * 0.5 - 110, panelY + panelHeight - 62);
     this.perkChoice.resize(width, height);
   }
 

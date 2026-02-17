@@ -1,6 +1,7 @@
 import { Container, Graphics, Text } from 'pixi.js';
 import type { StatsV1 } from '../../meta/Stats';
 import { TextButton } from '../../ui/widgets/TextButton';
+import { MENU_BODY_FONT, MENU_TITLE_FONT, drawMenuBackdrop, drawMenuCard } from '../../ui/theme/MenuTheme';
 import { copyTextWithFallback } from '../../utils/clipboard';
 import type { IGameState } from './IGameState';
 import type { GameStateId, StateContext } from './StateContext';
@@ -43,9 +44,10 @@ export class StatsState implements IGameState {
     text: 'Stats',
     style: {
       fill: 0xf4e2b5,
-      fontFamily: 'monospace',
-      fontSize: 42,
-      fontWeight: 'bold',
+      fontFamily: MENU_TITLE_FONT,
+      fontSize: 40,
+      fontWeight: '700',
+      letterSpacing: 0.9,
     },
   });
 
@@ -53,9 +55,10 @@ export class StatsState implements IGameState {
     text: '',
     style: {
       fill: 0xd8e9ff,
-      fontFamily: 'monospace',
-      fontSize: 15,
+      fontFamily: MENU_BODY_FONT,
+      fontSize: 14,
       lineHeight: 22,
+      letterSpacing: 0.2,
     },
   });
 
@@ -63,7 +66,7 @@ export class StatsState implements IGameState {
     text: '',
     style: {
       fill: 0x9dd1ff,
-      fontFamily: 'monospace',
+      fontFamily: MENU_BODY_FONT,
       fontSize: 14,
     },
   });
@@ -87,21 +90,25 @@ export class StatsState implements IGameState {
     this.copyAllButton = new TextButton({
       label: 'Copy Stats JSON',
       width: 210,
+      variant: 'secondary',
       onClick: () => this.copyAllStats(),
     });
     this.copyLastRunButton = new TextButton({
       label: 'Copy Last Run JSON',
       width: 210,
+      variant: 'secondary',
       onClick: () => this.copyLastRun(),
     });
     this.resetButton = new TextButton({
       label: 'Reset Stats',
       width: 210,
+      variant: 'danger',
       onClick: () => this.resetStats(),
     });
     this.backButton = new TextButton({
       label: 'Back',
       width: 210,
+      variant: 'primary',
       onClick: () => this.goBack(),
     });
 
@@ -268,14 +275,8 @@ export class StatsState implements IGameState {
     const panelX = width * 0.5 - panelWidth * 0.5;
     const panelY = height * 0.5 - panelHeight * 0.5;
 
-    this.bg.clear();
-    this.bg.rect(0, 0, width, height);
-    this.bg.fill({ color: 0x0f1720, alpha: 1 });
-
-    this.panel.clear();
-    this.panel.roundRect(panelX, panelY, panelWidth, panelHeight, 12);
-    this.panel.fill({ color: 0x121c2a, alpha: 0.96 });
-    this.panel.stroke({ color: 0x6e9bc9, alpha: 0.9, width: 1.6 });
+    drawMenuBackdrop(this.bg, width, height);
+    drawMenuCard(this.panel, panelX, panelY, panelWidth, panelHeight);
 
     this.title.position.set(width * 0.5, panelY + 34);
     this.summary.position.set(width * 0.5, panelY + 68);

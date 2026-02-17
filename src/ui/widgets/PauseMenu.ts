@@ -1,6 +1,7 @@
 import { Container, Graphics, Text } from 'pixi.js';
 import type { GameSettings } from '../../meta/Settings';
 import { getDefaultSettings } from '../../meta/Settings';
+import { MENU_BODY_FONT, MENU_TITLE_FONT, drawMenuCard } from '../theme/MenuTheme';
 import { clamp } from '../../utils/math';
 import { ControlsOverlay } from './ControlsOverlay';
 import { TextButton } from './TextButton';
@@ -29,16 +30,17 @@ export class PauseMenu {
     text: 'Paused',
     style: {
       fill: 0xf3e6bf,
-      fontFamily: 'monospace',
+      fontFamily: MENU_TITLE_FONT,
       fontSize: 40,
-      fontWeight: 'bold',
+      fontWeight: '700',
+      letterSpacing: 0.8,
     },
   });
   private readonly body = new Text({
     text: '',
     style: {
       fill: 0xd7e8ff,
-      fontFamily: 'monospace',
+      fontFamily: MENU_BODY_FONT,
       fontSize: 14,
       lineHeight: 22,
     },
@@ -93,16 +95,17 @@ export class PauseMenu {
     this.title.anchor.set(0.5, 0.5);
     this.body.anchor.set(0.5, 0);
 
-    this.resumeButton = new TextButton({ label: 'Resume', width: 260, onClick: () => this.resume() });
-    this.settingsButton = new TextButton({ label: 'Settings', width: 260, onClick: () => this.showView('settings') });
-    this.controlsButton = new TextButton({ label: 'Controls', width: 260, onClick: () => this.showView('controls') });
-    this.statsButton = new TextButton({ label: 'Stats', width: 260, onClick: () => this.showStats() });
-    this.quitButton = new TextButton({ label: 'Quit To Title', width: 260, onClick: () => this.showView('confirm_quit') });
+    this.resumeButton = new TextButton({ label: 'Resume', width: 260, variant: 'accent', onClick: () => this.resume() });
+    this.settingsButton = new TextButton({ label: 'Settings', width: 260, variant: 'secondary', onClick: () => this.showView('settings') });
+    this.controlsButton = new TextButton({ label: 'Controls', width: 260, variant: 'secondary', onClick: () => this.showView('controls') });
+    this.statsButton = new TextButton({ label: 'Stats', width: 260, variant: 'secondary', onClick: () => this.showStats() });
+    this.quitButton = new TextButton({ label: 'Quit To Title', width: 260, variant: 'danger', onClick: () => this.showView('confirm_quit') });
 
-    this.backButton = new TextButton({ label: 'Back', width: 180, onClick: () => this.showView('main') });
+    this.backButton = new TextButton({ label: 'Back', width: 180, variant: 'primary', onClick: () => this.showView('main') });
     this.resetSettingsButton = new TextButton({
       label: 'Reset Defaults',
       width: 180,
+      variant: 'danger',
       onClick: () => {
         const current = this.getSettings();
         this.onSettingsChanged({
@@ -113,23 +116,24 @@ export class PauseMenu {
       },
     });
 
-    this.masterMinus = new TextButton({ label: '-', width: 44, onClick: () => this.adjustNumber('masterVolume', -0.05, 0, 1) });
-    this.masterPlus = new TextButton({ label: '+', width: 44, onClick: () => this.adjustNumber('masterVolume', 0.05, 0, 1) });
-    this.sfxMinus = new TextButton({ label: '-', width: 44, onClick: () => this.adjustNumber('sfxVolume', -0.05, 0, 1) });
-    this.sfxPlus = new TextButton({ label: '+', width: 44, onClick: () => this.adjustNumber('sfxVolume', 0.05, 0, 1) });
-    this.musicMinus = new TextButton({ label: '-', width: 44, onClick: () => this.adjustNumber('musicVolume', -0.05, 0, 1) });
-    this.musicPlus = new TextButton({ label: '+', width: 44, onClick: () => this.adjustNumber('musicVolume', 0.05, 0, 1) });
-    this.cameraMinus = new TextButton({ label: '-', width: 44, onClick: () => this.adjustNumber('cameraSpeed', -0.1, 0.5, 2) });
-    this.cameraPlus = new TextButton({ label: '+', width: 44, onClick: () => this.adjustNumber('cameraSpeed', 0.1, 0.5, 2) });
+    this.masterMinus = new TextButton({ label: '-', width: 44, variant: 'secondary', onClick: () => this.adjustNumber('masterVolume', -0.05, 0, 1) });
+    this.masterPlus = new TextButton({ label: '+', width: 44, variant: 'secondary', onClick: () => this.adjustNumber('masterVolume', 0.05, 0, 1) });
+    this.sfxMinus = new TextButton({ label: '-', width: 44, variant: 'secondary', onClick: () => this.adjustNumber('sfxVolume', -0.05, 0, 1) });
+    this.sfxPlus = new TextButton({ label: '+', width: 44, variant: 'secondary', onClick: () => this.adjustNumber('sfxVolume', 0.05, 0, 1) });
+    this.musicMinus = new TextButton({ label: '-', width: 44, variant: 'secondary', onClick: () => this.adjustNumber('musicVolume', -0.05, 0, 1) });
+    this.musicPlus = new TextButton({ label: '+', width: 44, variant: 'secondary', onClick: () => this.adjustNumber('musicVolume', 0.05, 0, 1) });
+    this.cameraMinus = new TextButton({ label: '-', width: 44, variant: 'secondary', onClick: () => this.adjustNumber('cameraSpeed', -0.1, 0.5, 2) });
+    this.cameraPlus = new TextButton({ label: '+', width: 44, variant: 'secondary', onClick: () => this.adjustNumber('cameraSpeed', 0.1, 0.5, 2) });
 
-    this.minimapToggle = new TextButton({ label: '', width: 180, onClick: () => this.toggleBool('showMinimap') });
-    this.trailsToggle = new TextButton({ label: '', width: 180, onClick: () => this.toggleBool('showTrails') });
-    this.shakeToggle = new TextButton({ label: '', width: 180, onClick: () => this.toggleBool('reduceScreenShake') });
+    this.minimapToggle = new TextButton({ label: '', width: 180, variant: 'secondary', onClick: () => this.toggleBool('showMinimap') });
+    this.trailsToggle = new TextButton({ label: '', width: 180, variant: 'secondary', onClick: () => this.toggleBool('showTrails') });
+    this.shakeToggle = new TextButton({ label: '', width: 180, variant: 'secondary', onClick: () => this.toggleBool('reduceScreenShake') });
 
-    this.confirmNoButton = new TextButton({ label: 'Cancel', width: 140, onClick: () => this.showView('main') });
+    this.confirmNoButton = new TextButton({ label: 'Cancel', width: 140, variant: 'primary', onClick: () => this.showView('main') });
     this.confirmYesButton = new TextButton({
       label: 'Quit',
       width: 140,
+      variant: 'danger',
       onClick: () => {
         this.setVisible(false);
         this.onQuitToTitle();
@@ -207,9 +211,7 @@ export class PauseMenu {
     const y = screenHeight * 0.5 - panelH * 0.5;
 
     this.panel.clear();
-    this.panel.roundRect(x, y, panelW, panelH, 12);
-    this.panel.fill({ color: 0x121b28, alpha: 0.96 });
-    this.panel.stroke({ color: 0x739dc9, alpha: 0.92, width: 1.6 });
+    drawMenuCard(this.panel, x, y, panelW, panelH, { radius: 14 });
 
     this.title.position.set(screenWidth * 0.5, y + 44);
     this.body.position.set(screenWidth * 0.5, y + 84);
