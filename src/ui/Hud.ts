@@ -51,7 +51,6 @@ export class Hud {
 
     const lines = [
       `⚡ FPS: ${state.fps.toFixed(0)}`,
-      ``,
       `🎯 Selected: ${state.selectedCount}`,
       `⚔️  Type: ${state.selectedArchetypes || 'None'}`,
       `🛡️  Formation: ${state.formation}`,
