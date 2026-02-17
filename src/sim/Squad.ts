@@ -406,9 +406,7 @@ export class Squad {
   }
 
   private followWaypoints(context: SquadUpdateContext): void {
-    const activeWaypointsRemaining = this.waypoints.length - this.waypointIndex;
-    
-    if (activeWaypointsRemaining === 0) {
+    if (this.waypoints.length - this.waypointIndex === 0) {
       if (this.order === 'move') {
         this.holdPosition();
         return;
